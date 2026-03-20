@@ -2,19 +2,6 @@
 FastAPI Application - Supply Chain Management API
 ==================================================
 A production-ready REST API for managing supply chain operations.
-
-Features:
-- JWT Authentication with role-based access control (RBAC)
-- Comprehensive CRUD operations for all entities
-- Complex MySQL queries with aggregations, joins, and subqueries
-- Input validation and error handling
-- API documentation with Swagger UI
-
-Architecture:
-- FastAPI for REST endpoints
-- SQLAlchemy for ORM
-- Pydantic for data validation
-- JWT for authentication
 """
 
 from contextlib import asynccontextmanager
@@ -43,39 +30,19 @@ from routers import (
 # ============================================
 def create_default_users():
     """Create default users if they don't exist."""
+    from models import User
+
     db = database.SessionLocal()
     try:
-        from models import User
-
         default_users = [
-            {
-                "email": "admin@supplychain.com",
-                "username": "admin",
-                "password": "Admin123!",
-                "full_name": "System Administrator",
-                "role": "admin",
-            },
-            {
-                "email": "manager@supplychain.com",
-                "username": "manager",
-                "password": "Manager123!",
-                "full_name": "Supply Chain Manager",
-                "role": "manager",
-            },
-            {
-                "email": "staff@supplychain.com",
-                "username": "staff",
-                "password": "Staff123!",
-                "full_name": "Warehouse Staff",
-                "role": "staff",
-            },
-            {
-                "email": "viewer@supplychain.com",
-                "username": "viewer",
-                "password": "Viewer123!",
-                "full_name": "Viewer User",
-                "role": "viewer",
-            },
+            {"email": "admin@supplychain.com", "username": "admin", "password": "Admin123!",
+             "full_name": "System Administrator", "role": "admin"},
+            {"email": "manager@supplychain.com", "username": "manager", "password": "Manager123!",
+             "full_name": "Supply Chain Manager", "role": "manager"},
+            {"email": "staff@supplychain.com", "username": "staff", "password": "Staff123!",
+             "full_name": "Warehouse Staff", "role": "staff"},
+            {"email": "viewer@supplychain.com", "username": "viewer", "password": "Viewer123!",
+             "full_name": "Viewer User", "role": "viewer"},
         ]
 
         for user_data in default_users:
@@ -105,7 +72,7 @@ def create_default_users():
 # ============================================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup and shutdown events."""
+    """Startup events."""
     models.Base.metadata.create_all(bind=database.engine)
     create_default_users()
     yield
@@ -126,13 +93,17 @@ app = FastAPI(
 # ============================================
 # CORS Middleware
 # ============================================
-origins = [origin.strip() for origin in CORS_ORIGINS.split(",") if origin.strip()]
+origins = [o.strip() for o in CORS_ORIGINS.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=origins if origins != ["*"] else ["*"],
+    # Allow any *.vercel.app subdomain (frontend deployed on Vercel)
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # ============================================
@@ -159,13 +130,3 @@ def health_check():
         "timestamp": datetime.utcnow().isoformat(),
         "database": "connected" if database.check_database_connection() else "disconnected",
     }
-
-
-# ============================================
-# Run the Application
-# ============================================
-if __name__ == "__main__":
-    import uvicorn
-    from config import API_HOST, API_PORT
-
-    uvicorn.run(app, host=API_HOST, port=API_PORT)

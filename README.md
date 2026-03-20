@@ -5,7 +5,7 @@ API REST pour la gestion de la chaîne d'approvisionnement. Construite avec **Fa
 ![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-005571?style=flat-square)
 ![MySQL](https://img.shields.io/badge/MySQL-8.0+-4479A1?style=flat-square)
-![License](https://img.shields.io/badge/Licence-MIT-green?style=flat-square)
+![Deploy](https://img.shields.io/badge/Deploy-Render-46E3B7?style=flat-square)
 
 ---
 
@@ -42,8 +42,10 @@ SupplyChain/
 │   ├── shipments.py        # CRUD expéditions
 │   ├── orders.py           # CRUD commandes + réservation stock
 │   └── analytics.py        # Rapports et statistiques
-├── requirements.txt
-├── runtime.txt
+├── requirements.txt        # Dépendances de production
+├── dev-requirements.txt    # Dépendances de développement
+├── runtime.txt             # Version Python
+├── build.sh                # Script de build (Render)
 ├── .env                    # Variables d'environnement (git-ignoré)
 ├── .env.example            # Modèle de configuration
 ├── .gitignore
@@ -67,7 +69,7 @@ SupplyChain/
 
 ---
 
-## Installation
+## Installation locale
 
 ### Prérequis
 
@@ -86,8 +88,11 @@ venv\Scripts\activate
 # Linux/Mac:
 source venv/bin/activate
 
-# Installer les dépendances
+# Installer les dépendances de production
 pip install -r requirements.txt
+
+# Installer les dépendances de développement (optionnel)
+pip install -r dev-requirements.txt
 ```
 
 ### Variables d'environnement
@@ -106,7 +111,7 @@ SECRET_KEY=une-clé-secrète-unique-et-longue
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 API_HOST=0.0.0.0
 API_PORT=8000
-CORS_ORIGINS=http://localhost:3000
+CORS_ORIGINS=http://localhost:3000,http://localhost:5173
 ```
 
 ### Créer la base de données
@@ -123,6 +128,55 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 # Ou directement
 python main.py
+```
+
+---
+
+## Déploiement sur Render
+
+### Étapes
+
+1. **Pousse ton code sur GitHub**
+
+2. **Crée un nouveau Web Service sur Render** depuis ton dépôt
+
+3. **Configure le service** :
+
+   | Paramètre | Valeur |
+   |-----------|--------|
+   | Runtime | Python 3 |
+   | Build Command | `pip install -r requirements.txt` |
+   | Start Command | `gunicorn main:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT` |
+
+4. **Ajoute les variables d'environnement** dans Render Dashboard :
+
+   | Variable | Description |
+   |----------|-------------|
+   | `DATABASE_URL` | Chaîne de connexion MySQL/TiDB |
+   | `SECRET_KEY` | Clé secrète JWT (32+ caractères) |
+   | `ACCESS_TOKEN_EXPIRE_MINUTES` | Durée de vie du token (ex: 60) |
+   | `DEBUG` | `false` en production |
+   | `CORS_ORIGINS` | Origines autorisées (séparées par virgule) |
+
+5. **Déploie** — Render exécute automatiquement le build et lance l'application
+
+---
+
+## Configuration CORS
+
+Le middleware CORS autorise :
+
+| Origine | Méthode |
+|---------|---------|
+| Origines spécifiées dans `CORS_ORIGINS` | Variable d'environnement |
+| `https://*.vercel.app` | Regex automatique (tous les déploiements Vercel) |
+| `http://localhost:3000` | Dev React/Vue par défaut |
+| `http://localhost:5173` | Dev Vite par défaut |
+
+Pour ajouter un domaine de production personnalisé :
+
+```env
+CORS_ORIGINS=https://mon-domaine.com,https://www.mon-domaine.com
 ```
 
 ---
@@ -224,27 +278,20 @@ Créés automatiquement au premier démarrage :
 
 ---
 
-## Exemple d'utilisation
+## Exemples d'utilisation
 
 ### Connexion
 
 ```bash
-curl -X POST "http://localhost:8000/api/auth/login" \
+curl -X POST "https://ton-api.onrender.com/api/auth/login" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "username=admin&password=Admin123!"
-```
-
-### Utiliser le token
-
-```bash
-curl "http://localhost:8000/api/warehouses" \
-  -H "Authorization: Bearer <votre_token>"
 ```
 
 ### Créer une commande
 
 ```bash
-curl -X POST "http://localhost:8000/api/orders" \
+curl -X POST "https://ton-api.onrender.com/api/orders" \
   -H "Authorization: Bearer <votre_token>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -275,12 +322,14 @@ curl -X POST "http://localhost:8000/api/orders" \
 |--------|-------------|
 | Framework | FastAPI 0.109 |
 | ORM | SQLAlchemy 2.0 |
-| Base de données | MySQL 8.0+ |
+| Base de données | MySQL 8.0+ / TiDB Cloud |
 | Authentification | JWT (python-jose) |
 | Hachage mot de passe | bcrypt |
-| Validation | Pydantic 2.11 |
-| Serveur | Uvicorn |
+| Validation | Pydantic 2.6 |
+| Serveur prod | Gunicorn + Uvicorn workers |
 | Pool connexions | QueuePool (10+20 overflow) |
+| Backend deploy | Render |
+| Frontend deploy | Vercel |
 
 ---
 
@@ -290,7 +339,7 @@ curl -X POST "http://localhost:8000/api/orders" \
 - **Mots de passe** : hachés avec bcrypt
 - **JWT** : tokens avec expiration configurable
 - **RBAC** : 4 niveaux de rôles
-- **CORS** : configurable via `CORS_ORIGINS`
+- **CORS** : whitelist configurable + regex `*.vercel.app` automatique
 - **Injection SQL** : requêtes paramétrées via SQLAlchemy ORM
 - **Validation** : tous les inputs validés par Pydantic
 
