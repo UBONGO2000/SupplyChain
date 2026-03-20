@@ -13,7 +13,15 @@ from sqlalchemy.orm import sessionmaker, declarative_base, Session
 from sqlalchemy.pool import QueuePool
 from typing import Generator
 
+import ssl
+
 from config import DATABASE_URL
+
+
+# ============================================
+# SSL for TiDB Cloud (requires secure transport)
+# ============================================
+ssl_context = ssl.create_default_context()
 
 
 # ============================================
@@ -29,6 +37,7 @@ engine = create_engine(
     echo=False,
     connect_args={
         "charset": "utf8mb4",
+        "ssl": ssl_context,
     },
 )
 
