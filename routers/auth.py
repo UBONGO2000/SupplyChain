@@ -5,12 +5,11 @@ Endpoints for user registration, login, and profile.
 """
 
 from fastapi import APIRouter, HTTPException, status, Depends
-from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
+from pydantic import BaseModel
 
 import models
-import schema
 from schema import UserCreate, UserResponse, TokenResponse
 from auth import (
     get_password_hash, verify_password, create_access_token,
@@ -19,6 +18,12 @@ from auth import (
 from database import get_db
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
+
+
+class LoginRequest(BaseModel):
+    """Login request body (JSON)"""
+    username: str
+    password: str
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -48,16 +53,16 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    """Authenticate user and return JWT token."""
+def login(body: LoginRequest, db: Session = Depends(get_db)):
+    """Authenticate user and return JWT token. Accepts JSON."""
     user = db.query(models.User).filter(
         or_(
-            models.User.username == form_data.username,
-            models.User.email == form_data.username,
+            models.User.username == body.username,
+            models.User.email == body.username,
         )
     ).first()
 
-    if not user or not verify_password(form_data.password, user.hashed_password):
+    if not user or not verify_password(body.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
