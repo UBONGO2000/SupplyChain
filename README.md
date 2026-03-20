@@ -1,86 +1,83 @@
-# 📦 API de Gestion de la Chaîne d'Approvisionnement
+# Supply Chain Management API
 
-Une API REST prête pour la production pour la gestion des opérations de chaîne d'approvisionnement avec FastAPI, SQLAlchemy et MySQL.
+API REST pour la gestion de la chaîne d'approvisionnement. Construite avec **FastAPI**, **SQLAlchemy** et **MySQL**.
 
-![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-005571?style=for-the-badge)
-![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge)
-![MySQL](https://img.shields.io/badge/MySQL-8.0+-4479A1?style=for-the-badge)
-![License](https://img.shields.io/badge/Licence-MIT-green?style=for-the-badge)
-
----
-
-## ✨ Fonctionnalités
-
-### Fonctionnalités Principales
-
-- ✅ **Opérations CRUD complètes** - Créer, Lire, Mettre à jour, Supprimer pour toutes les entités
-- ✅ **Requêtes MySQL complexes** - Agrégations, JOINs, sous-requêtes et filtrage
-- ✅ **Gestion des stocks** - Suivi des stocks, réservations et ajustements
-- ✅ **Gestion des commandes** - Création de commandes avec réservation automatique des stocks
-- ✅ **Gestion des fournisseurs** - Suivi des fournisseurs avec métriques de performance
-- ✅ **Suivi des expéditions** - Statut d'expédition et suivi de livraison
-- ✅ **Analyses et rapports** - Résumés des ventes, alertes de stock, produits populaires
-
-### Sécurité et Authentification
-
-- ✅ **Authentification JWT** - Authentification sécurisée par jetons
-- ✅ **Contrôle d'accès basé sur les rôles (RBAC)** - Rôles Admin, Manager, Personnel, Lecteur
-- ✅ **Hachage de mot de passe** - Bcrypt pour le stockage sécurisé des mots de passe
-- ✅ **Validation des entrées** - Modèles Pydantic avec validation complète
-- ✅ **Prévention des injections SQL** - Requêtes paramétrées via SQLAlchemy
-
-### Bonnes Pratiques
-
-- ✅ **Pooling de connexions** - Gestion efficace des connexions à la base de données
-- ✅ **Conception d'API RESTful** - Méthodes HTTP standard et codes de statut
-- ✅ **Documentation de l'API** - Swagger UI et ReDoc auto-générés
-- ✅ **Gestion des erreurs** - Exceptions HTTP appropriées avec messages significatifs
-- ✅ **Pagination** - Réponses paginées standard pour tous les points de terminaison de liste
+![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-005571?style=flat-square)
+![MySQL](https://img.shields.io/badge/MySQL-8.0+-4479A1?style=flat-square)
+![License](https://img.shields.io/badge/Licence-MIT-green?style=flat-square)
 
 ---
 
-## 📁 Structure du Projet
+## Fonctionnalités
 
-```text
+- CRUD complet pour entrepôts, fournisseurs, produits, stocks, expéditions et commandes
+- Authentification JWT avec rôles (Admin, Manager, Staff, Viewer)
+- Requêtes SQL complexes : agrégations, JOINs, sous-requêtes
+- Gestion des stocks avec réservation automatique lors des commandes
+- Analytiques : résumé des ventes, alertes stock faible, top produits, performance fournisseurs
+- Pagination standardisée sur tous les endpoints
+- Validation des entrées avec Pydantic
+- Documentation API auto-générée (Swagger UI + ReDoc)
+
+---
+
+## Structure du projet
+
+```
 SupplyChain/
-├── auth.py              # Authentification JWT et hachage de mot de passe
-├── database.py          # Configuration et connexion SQLAlchemy
-├── models.py           # Modèles ORM (User, Warehouse, Product, etc.)
-├── schema.py           # Schémas de validation Pydantic
-├── main.py            # Application FastAPI et routes
-├── requirements.txt    # Dépendances Python
-├── .env               # Variables d'environnement (local)
-├── .env.example       # Modèle des variables d'environnement
-└── README.md         # Ce fichier
+├── main.py                 # Point d'entrée de l'application
+├── config.py               # Configuration centralisée (variables d'environnement)
+├── database.py             # Connexion SQLAlchemy + pooling
+├── models.py               # Modèles ORM (8 tables)
+├── schema.py               # Schémas Pydantic de validation
+├── auth.py                 # Authentification JWT + RBAC
+├── routers/
+│   ├── __init__.py
+│   ├── auth.py             # Register, login, profil
+│   ├── warehouses.py       # CRUD entrepôts
+│   ├── suppliers.py        # CRUD fournisseurs
+│   ├── products.py         # CRUD produits
+│   ├── inventory.py        # CRUD stocks + ajustements
+│   ├── shipments.py        # CRUD expéditions
+│   ├── orders.py           # CRUD commandes + réservation stock
+│   └── analytics.py        # Rapports et statistiques
+├── requirements.txt
+├── runtime.txt
+├── .env                    # Variables d'environnement (git-ignoré)
+├── .env.example            # Modèle de configuration
+├── .gitignore
+└── README.md
 ```
 
 ---
 
-## 🛠️ Installation
+## Modèles de données
+
+| Modèle | Description | Relations |
+|--------|-------------|-----------|
+| **User** | Utilisateurs et authentification | 1→N Order |
+| **Warehouse** | Entrepôts de stockage | 1→N Inventory, 1→N Shipment |
+| **Supplier** | Fournisseurs | 1→N Product, 1→N Shipment |
+| **Product** | Catalogue produits | 1→N Inventory, 1→N OrderItem |
+| **Inventory** | Stock (jonction warehouse × product) | FK Warehouse, FK Product |
+| **Shipment** | Expéditions | FK Warehouse, FK Supplier |
+| **Order** | Commandes clients | 1→N OrderItem, FK User |
+| **OrderItem** | Lignes de commande | FK Order, FK Product |
+
+---
+
+## Installation
 
 ### Prérequis
 
 - Python 3.11+
-- MySQL 8.0+
-- pip ou poetry
+- MySQL 8.0+ (ou TiDB Cloud compatible MySQL)
 
-### Configuration Git
-
-```bash
-# Initialiser git (si non déjà fait)
-git init
-
-# Créer le fichier .gitignore (déjà inclus dans le projet)
-# Ce fichier exclut les fichiers sensibles comme .env
-```
-
-### Étape 1 : Cloner et Configurer
+### Configuration
 
 ```bash
-# Naviguer vers le répertoire du projet
-cd SupplyChain
-
-# Créer un environnement virtuel (recommandé)
+# Créer l'environnement virtuel
 python -m venv venv
 
 # Activer l'environnement virtuel
@@ -93,278 +90,214 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### Étape 2 : Configuration de l'Environnement
+### Variables d'environnement
 
 ```bash
-# Copier le fichier d'environnement d'exemple
-copy .env.example .env
-
-# Modifier .env avec vos identifiants de base de données
-# Exemple:
-# DATABASE_URL=mysql+pymysql://root:Mysql2026@localhost:3306/supply_chain_db
+# Copier le fichier d'exemple
+copy .env.example .env   # Windows
+cp .env.example .env     # Linux/Mac
 ```
 
-### Étape 3 : Configuration de la Base de Données
+Modifier `.env` :
+
+```env
+DATABASE_URL=mysql+pymysql://user:password@host:port/database_name
+SECRET_KEY=une-clé-secrète-unique-et-longue
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+API_HOST=0.0.0.0
+API_PORT=8000
+CORS_ORIGINS=http://localhost:3000
+```
+
+### Créer la base de données
 
 ```sql
--- Créer la base de données dans MySQL
 CREATE DATABASE supply_chain_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-### Étape 4 : Lancer l'Application
+### Lancer l'application
 
 ```bash
-# Serveur de développement avec rechargement automatique
+# Mode développement (rechargement automatique)
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
-# Ou exécuter directement
+# Ou directement
 python main.py
 ```
 
-### Étape 5 : Accéder à l'API
+---
 
-- **Swagger UI** : <http://localhost:8000/docs>
-- **ReDoc** : <http://localhost:8000/redoc>
-- **Vérification de santé** : <http://localhost:8000/health>
+## Utilisateurs par défaut
+
+Créés automatiquement au premier démarrage :
+
+| Rôle | Email | Mot de passe |
+|------|-------|-------------|
+| Admin | admin@supplychain.com | Admin123! |
+| Manager | manager@supplychain.com | Manager123! |
+| Staff | staff@supplychain.com | Staff123! |
+| Viewer | viewer@supplychain.com | Viewer123! |
 
 ---
 
-## 🔐 Utilisateurs par Défaut
+## Endpoints API
 
-L'application crée automatiquement les utilisateurs suivants au premier démarrage :
+### Authentification
 
-| Rôle | Email | Nom d'utilisateur | Mot de passe |
-| :--- | :--- | :--- | :--- |
-| Admin | `admin@supplychain.com` | admin | Admin123! |
-| Manager | `manager@supplychain.com` | manager | Manager123! |
-| Staff | `staff@supplychain.com` | staff | Staff123! |
-| Viewer | `viewer@supplychain.com` | viewer | Viewer123! |
+| Méthode | Endpoint | Description | Accès |
+|---------|----------|-------------|-------|
+| POST | `/api/auth/register` | Inscription | Public |
+| POST | `/api/auth/login` | Connexion (retourne JWT) | Public |
+| GET | `/api/auth/me` | Profil utilisateur courant | Authentifié |
 
-**Remarque :** Ces utilisateurs ne seront pas créés s'ils existent déjà dans la base de données.
+### Entrepôts
 
-Pour vous connecter :
+| Méthode | Endpoint | Description | Accès |
+|---------|----------|-------------|-------|
+| GET | `/api/warehouses` | Liste (paginée, filtrable) | Authentifié |
+| POST | `/api/warehouses` | Créer | Admin/Manager |
+| GET | `/api/warehouses/{id}` | Détail | Authentifié |
+| PUT | `/api/warehouses/{id}` | Modifier | Admin/Manager |
+| DELETE | `/api/warehouses/{id}` | Supprimer | Admin |
+
+### Fournisseurs
+
+| Méthode | Endpoint | Description | Accès |
+|---------|----------|-------------|-------|
+| GET | `/api/suppliers` | Liste (filtrable par pays, rating) | Authentifié |
+| POST | `/api/suppliers` | Créer | Admin/Manager |
+| GET | `/api/suppliers/{id}` | Détail | Authentifié |
+| PUT | `/api/suppliers/{id}` | Modifier | Admin/Manager |
+
+### Produits
+
+| Méthode | Endpoint | Description | Accès |
+|---------|----------|-------------|-------|
+| GET | `/api/products` | Liste (filtrable par catégorie, prix, fournisseur) | Authentifié |
+| POST | `/api/products` | Créer | Admin/Manager |
+| GET | `/api/products/{id}` | Détail avec résumé stock | Authentifié |
+| PUT | `/api/products/{id}` | Modifier | Admin/Manager |
+
+### Stocks
+
+| Méthode | Endpoint | Description | Accès |
+|---------|----------|-------------|-------|
+| GET | `/api/inventory` | Liste (filtrable par entrepôt, produit, stock faible) | Authentifié |
+| POST | `/api/inventory` | Créer un enregistrement | Admin/Manager/Staff |
+| GET | `/api/inventory/warehouse/{id}` | Stock d'un entrepôt | Authentifié |
+| POST | `/api/inventory/adjust` | Ajuster les quantités | Admin/Manager/Staff |
+
+### Commandes
+
+| Méthode | Endpoint | Description | Accès |
+|---------|----------|-------------|-------|
+| GET | `/api/orders` | Liste (les utilisateurs voient les leurs) | Authentifié |
+| POST | `/api/orders` | Créer (réservation auto du stock) | Authentifié |
+| GET | `/api/orders/{id}` | Détail | Propriétaire/Admin |
+
+### Expéditions
+
+| Méthode | Endpoint | Description | Accès |
+|---------|----------|-------------|-------|
+| GET | `/api/shipments` | Liste (filtrable par statut, fournisseur) | Authentifié |
+| POST | `/api/shipments` | Créer | Admin/Manager/Staff |
+| GET | `/api/shipments/{id}` | Détail | Authentifié |
+| PUT | `/api/shipments/{id}` | Modifier | Admin/Manager/Staff |
+
+### Analytiques
+
+| Méthode | Endpoint | Description | Accès |
+|---------|----------|-------------|-------|
+| GET | `/api/analytics/inventory-summary` | Résumé stock par entrepôt | Authentifié |
+| GET | `/api/analytics/sales-summary` | Statistiques ventes | Admin/Manager |
+| GET | `/api/analytics/low-stock-alerts` | Alertes réapprovisionnement | Authentifié |
+| GET | `/api/analytics/top-products` | Produits les plus vendus | Authentifié |
+| GET | `/api/analytics/supplier-performance` | Performance fournisseurs | Admin/Manager |
+
+### Système
+
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| GET | `/health` | Vérification de santé |
+| GET | `/docs` | Swagger UI |
+| GET | `/redoc` | ReDoc |
+
+---
+
+## Exemple d'utilisation
+
+### Connexion
 
 ```bash
-# Connexion Admin
 curl -X POST "http://localhost:8000/api/auth/login" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "username=admin&password=Admin123!"
 ```
 
----
+### Utiliser le token
 
-## 📡 Points de Terminaison de l'API
-
-### Authentification
-
-| Méthode | Point de Terminaison | Description |
-| -------- | ---------- | ------------- |
-| POST | `/api/auth/register` | Enregistrer un nouvel utilisateur |
-| POST | `/api/auth/login` | Connexion et obtenir un jeton JWT |
-| GET | `/api/auth/me` | Obtenir les informations de l'utilisateur actuel |
-
-### Entrepôts
-
-| Méthode | Point de Terminaison | Description | Accès |
-| -------- | ---------- | ------------- | -------- |
-| GET | `/api/warehouses` | Liste de tous les entrepôts | Tous |
-| POST | `/api/warehouses` | Créer un entrepôt | Admin/Manager |
-| GET | `/api/warehouses/{id}` | Obtenir un entrepôt | Tous |
-| PUT | `/api/warehouses/{id}` | Mettre à jour un entrepôt | Admin/Manager |
-| DELETE | `/api/warehouses/{id}` | Supprimer un entrepôt | Admin |
-
-### Produits
-
-| Méthode | Point de Terminaison | Description | Accès |
-| -------- | ---------- | ------------- | -------- |
-| GET | `/api/products` | Liste des produits (avec filtres) | Tous |
-| POST | `/api/products` | Créer un produit | Admin/Manager |
-| GET | `/api/products/{id}` | Obtenir un produit avec le stock | Tous |
-| PUT | `/api/products/{id}` | Mettre à jour un produit | Admin/Manager |
-
-### Stocks
-
-| Méthode | Point de Terminaison | Description | Accès |
-| -------- | ---------- | ------------- | -------- |
-| GET | `/api/inventory` | Liste de tous les stocks | Tous |
-| POST | `/api/inventory` | Créer un enregistrement de stock | Personnel+ |
-| GET | `/api/inventory/warehouse/{id}` | Stock de l'entrepôt | Tous |
-| POST | `/api/inventory/adjust` | Ajuster la quantité en stock | Personnel+ |
-
-### Commandes
-
-| Méthode | Point de Terminaison | Description | Accès |
-| -------- | ---------- | ------------- | -------- |
-| GET | `/api/orders` | Liste des commandes | Tous (propres) / Admin |
-| POST | `/api/orders` | Créer une commande | Authentifié |
-| GET | `/api/orders/{id}` | Obtenir les détails de la commande | Propriétaire / Admin |
-
-### Expéditions
-
-| Méthode | Point de Terminaison | Description | Accès |
-| -------- | ---------- | ------------- | -------- |
-| GET | `/api/shipments` | Liste des expéditions | Tous |
-| POST | `/api/shipments` | Créer une expédition | Personnel+ |
-| PUT | `/api/shipments/{id}` | Mettre à jour une expédition | Personnel+ |
-
-### Analytiques
-
-| Méthode | Point de Terminaison | Description | Accès |
-| -------- | ---------- | ------------- | -------- |
-| GET | `/api/analytics/inventory-summary` | Stock par entrepôt | Admin/Manager |
-| GET | `/api/analytics/sales-summary` | Statistiques des ventes | Admin/Manager |
-| GET | `/api/analytics/low-stock-alerts` | Alertes de réapprovisionnement | Tous |
-| GET | `/api/analytics/top-products` | Meilleures ventes | Tous |
-| GET | `/api/analytics/supplier-performance` | Métriques des fournisseurs | Admin/Manager |
-
----
-
-## 🔍 Exemples de Requêtes MySQL Complexes
-
-### 1. Résumé des Stocks par Entrepôt (Agrégation + JOIN)
-
-```sql
-SELECT
-    w.id, w.name,
-    COUNT(i.product_id) as total_products,
-    SUM(i.quantity) as total_quantity,
-    SUM(i.quantity * p.unit_price) as total_value
-FROM warehouses w
-JOIN inventory i ON w.id = i.warehouse_id
-JOIN products p ON i.product_id = p.id
-GROUP BY w.id;
+```bash
+curl "http://localhost:8000/api/warehouses" \
+  -H "Authorization: Bearer <votre_token>"
 ```
 
-### 2. Produits les Plus Vendus (JOIN + Agrégation + ORDER BY)
+### Créer une commande
 
-```sql
-SELECT
-    p.id, p.name, p.sku,
-    SUM(oi.quantity) as total_sold,
-    COUNT(DISTINCT oi.order_id) as order_count
-FROM products p
-JOIN order_items oi ON p.id = oi.product_id
-JOIN orders o ON oi.order_id = o.id
-GROUP BY p.id
-ORDER BY total_sold DESC
-LIMIT 10;
-```
-
-### 3. Alertes de Stock Faible (Sous-requête + JOIN)
-
-```sql
-SELECT
-    p.id, p.name, p.sku,
-    i.warehouse_id, w.name,
-    i.quantity, i.reorder_level
-FROM products p
-JOIN inventory i ON p.id = i.product_id
-JOIN warehouses w ON i.warehouse_id = w.id
-WHERE i.quantity < i.reorder_level;
-```
-
-### 4. Résumé des Ventes avec Plage de Dates (Agrégation Conditionnelle)
-
-```sql
-SELECT
-    COUNT(*) as total_orders,
-    SUM(total_amount) as total_revenue,
-    AVG(total_amount) as avg_order_value,
-    SUM(CASE WHEN status = 'Delivered' THEN 1 ELSE 0 END) as delivered
-FROM orders
-WHERE ordered_at BETWEEN '2024-01-01' AND '2024-12-31';
+```bash
+curl -X POST "http://localhost:8000/api/orders" \
+  -H "Authorization: Bearer <votre_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": 1,
+    "shipping_address": "123 Rue Example, Paris",
+    "items": [
+      {"product_id": 1, "quantity": 2, "unit_price": 29.99, "discount_percent": 10}
+    ]
+  }'
 ```
 
 ---
 
-## 🔒 Contrôle d'Accès Basé sur les Rôles
+## Contrôle d'accès (RBAC)
 
 | Rôle | Permissions |
-| ------ | ------------ |
+|------|------------|
 | **Admin** | Accès complet à toutes les opérations |
-| **Manager** | CRUD sur les ressources, voir les analytiques |
-| **Staff** | Ajustements de stocks, créer des commandes/expéditions |
-| **Viewer** | Accès en lecture seule aux données publiques |
+| **Manager** | CRUD sur les ressources, analytiques avancées |
+| **Staff** | Ajustements stocks, création commandes/expéditions |
+| **Viewer** | Lecture seule sur les données publiques |
 
 ---
 
-## 📱 Pile Technologique
+## Stack technique
 
 | Couche | Technologie |
-| ----- | ------------ |
-| Framework | FastAPI |
-| ORM | SQLAlchemy |
-| Base de données | MySQL |
+|--------|-------------|
+| Framework | FastAPI 0.109 |
+| ORM | SQLAlchemy 2.0 |
+| Base de données | MySQL 8.0+ |
 | Authentification | JWT (python-jose) |
-| Hachage de mot de passe | Bcrypt |
-| Validation | Pydantic |
+| Hachage mot de passe | bcrypt |
+| Validation | Pydantic 2.11 |
 | Serveur | Uvicorn |
+| Pool connexions | QueuePool (10+20 overflow) |
 
 ---
 
-## 🧪 Tests
+## Sécurité
 
-```bash
-# Exécuter avec pytest
-pytest -v
+- **SECRET_KEY** : chargée depuis `.env` (jamais en dur dans le code)
+- **Mots de passe** : hachés avec bcrypt
+- **JWT** : tokens avec expiration configurable
+- **RBAC** : 4 niveaux de rôles
+- **CORS** : configurable via `CORS_ORIGINS`
+- **Injection SQL** : requêtes paramétrées via SQLAlchemy ORM
+- **Validation** : tous les inputs validés par Pydantic
 
-# Avec couverture
-pytest --cov=. --cov-report=html
-```
-
----
-
-## 🚀 Déploiement en Production
-
-1. **Définir les Variables d'Environnement**
-
-   ```bash
-   # .env
-   DATABASE_URL=mysql+pymysql://user:pass@prod-host:3306/prod_db
-   SECRET_KEY=votre-clé-sécurisée-aléatoire
-   DEBUG=false
-   ```
-
-2. **Utiliser un Serveur de Production**
-
-   ```bash
-   uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4
-   ```
-
-3. **Envisager l'Utilisation de**
-
-   - Gunicorn comme gestionnaire de processus
-   - Nginx comme proxy inverse
-   - Docker pour la conteneurisation
+**Important** : ne jamais commiter le fichier `.env` dans Git.
 
 ---
 
-## 📝 Licence
+## Licence
 
-Licence MIT - n'hésitez pas à utiliser ce projet à des fins d'apprentissage ou commerciales.
-
----
-
-## 🔐 Sécurité
-
-**Important :** Ne jamais commiter vos fichiers `.env` ou secrets dans Git !
-
-Le fichier `.gitignore` inclus dans le projet exclut automatiquement :
-- `.env` (variables d'environnement avec mots de passe)
-- Fichiers de cache Python
-- Environments virtuels
-- Fichiers de base de données locales
-
-Si vous avez accidentellement commité des fichiers sensibles, utilisez :
-```bash
-git rm --cached .env
-git commit -m "Remove sensitive file from git tracking"
-```
-
----
-
-## 🙏 Remerciements
-
-- Documentation FastAPI
-- Guide ORM SQLAlchemy
-- Python-Jose pour l'implémentation JWT
+MIT
