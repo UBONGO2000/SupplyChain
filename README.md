@@ -32,6 +32,12 @@ SupplyChain/
 ├── models.py               # Modèles ORM (8 tables)
 ├── schema.py               # Schémas Pydantic de validation
 ├── auth.py                 # Authentification JWT + RBAC
+├── seed_data.py             # Données de démonstration (idempotent)
+├── alembic.ini              # Configuration Alembic
+├── alembic/
+│   ├── env.py               # Config des migrations (réutilise l'engine SSL de database.py)
+│   ├── script.py.mako        # Template des fichiers de migration
+│   └── versions/             # Historique des migrations de schéma
 ├── routers/
 │   ├── __init__.py
 │   ├── auth.py             # Register, login, profil
@@ -66,6 +72,52 @@ SupplyChain/
 | **Shipment** | Expéditions | FK Warehouse, FK Supplier |
 | **Order** | Commandes clients | 1→N OrderItem, FK User |
 | **OrderItem** | Lignes de commande | FK Order, FK Product |
+
+---
+
+## Migrations de base de données (Alembic)
+
+Le schéma de la base n'est plus créé via `Base.metadata.create_all()` (qui ne crée que les tables manquantes et ignore silencieusement toute modification de colonne sur une table existante — source d'un vrai bug de désynchronisation de schéma rencontré en production). La gestion du schéma passe désormais entièrement par **Alembic**.
+
+### Workflow au quotidien
+
+Après avoir modifié un modèle dans `models.py` :
+
+```bash
+# Génère un fichier de migration en comparant models.py à la base réelle
+alembic revision --autogenerate -m "description du changement"
+
+# Relis le fichier généré dans alembic/versions/ avant de l'appliquer
+alembic upgrade head
+```
+
+### Commandes utiles
+
+| Commande | Effet |
+|----------|-------|
+| `alembic current` | Affiche la révision actuellement appliquée en base |
+| `alembic history` | Liste toutes les migrations, dans l'ordre |
+| `alembic upgrade head` | Applique toutes les migrations en attente |
+| `alembic downgrade -1` | Annule la dernière migration |
+| `alembic stamp head` | Marque la base comme à jour **sans exécuter de SQL** (utile si les tables existent déjà manuellement) |
+
+**Important** : `alembic/env.py` réutilise directement `database.engine` (celui de l'application) plutôt que de construire une connexion séparée. C'est nécessaire car TiDB Cloud refuse les connexions non chiffrées (`erreur 1105`) — utiliser un moteur distinct fait perdre la configuration SSL et fait échouer les migrations en silence.
+
+### En production (Render)
+
+Le **Build Command** applique les migrations automatiquement à chaque déploiement, avant même que l'application ne démarre :
+
+```
+pip install -r requirements.txt && alembic upgrade head
+```
+
+---
+
+## Données de démonstration
+
+`seed_data.py` peuple la base avec un jeu de données réaliste (3 entrepôts, 4 fournisseurs, 10 produits, 10 lignes de stock — dont volontairement 2 en stock faible pour tester les alertes —, 3 expéditions et 2 commandes). Cette fonction est appelée automatiquement au démarrage de l'application (voir `lifespan` dans `main.py`) et est **idempotente** : elle ne fait rien si des entrepôts existent déjà en base, donc aucun risque de doublon à chaque redéploiement.
+
+But : permettre de tester immédiatement tous les endpoints (Postman, Swagger, ou un futur frontend) sans avoir à créer des données à la main.
 
 ---
 
@@ -120,6 +172,13 @@ CORS_ORIGINS=http://localhost:3000,http://localhost:5173
 CREATE DATABASE supply_chain_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
+### Appliquer les migrations
+
+```bash
+alembic upgrade head
+```
+Crée les 8 tables avec le schéma à jour. Les utilisateurs par défaut et les données de démonstration se créent automatiquement au premier démarrage de l'application (voir plus bas).
+
 ### Lancer l'application
 
 ```bash
@@ -145,7 +204,7 @@ python main.py
    | Paramètre | Valeur |
    |-----------|--------|
    | Runtime | Python 3 |
-   | Build Command | `pip install -r requirements.txt` |
+   | Build Command | `pip install -r requirements.txt && alembic upgrade head` |
    | Start Command | `gunicorn main:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT` |
 
 4. **Ajoute les variables d'environnement** dans Render Dashboard :
@@ -280,18 +339,20 @@ Créés automatiquement au premier démarrage :
 
 ## Exemples d'utilisation
 
+**API en ligne** : [https://supplychain-39y0.onrender.com/docs](https://supplychain-39y0.onrender.com/docs)
+
 ### Connexion
 
 ```bash
-curl -X POST "https://ton-api.onrender.com/api/auth/login" \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "username=admin&password=Admin123!"
+curl -X POST "https://supplychain-39y0.onrender.com/api/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "Admin123!"}'
 ```
 
 ### Créer une commande
 
 ```bash
-curl -X POST "https://ton-api.onrender.com/api/orders" \
+curl -X POST "https://supplychain-39y0.onrender.com/api/orders" \
   -H "Authorization: Bearer <votre_token>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -326,6 +387,7 @@ curl -X POST "https://ton-api.onrender.com/api/orders" \
 | Authentification | JWT (python-jose) |
 | Hachage mot de passe | bcrypt |
 | Validation | Pydantic 2.6 |
+| Migrations | Alembic |
 | Serveur prod | Gunicorn + Uvicorn workers |
 | Pool connexions | QueuePool (10+20 overflow) |
 | Backend deploy | Render |
@@ -350,3 +412,7 @@ curl -X POST "https://ton-api.onrender.com/api/orders" \
 ## Licence
 
 MIT
+
+## Author
+
+Georges NTCHANGA
