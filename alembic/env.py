@@ -67,15 +67,18 @@ def run_migrations_offline() -> None:
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode.
 
-    In this scenario we need to create an Engine
-    and associate a connection with the context.
-
+    Reuses the app's own engine from database.py instead of building a
+    fresh one via engine_from_config. This matters because database.py
+    forces connect_args={"ssl": {"ssl": {}}} for TiDB Cloud (which rejects
+    unencrypted connections with error 1105), and engine_from_config has
+    no way to know about that requirement -- it only reads plain URL/pool
+    options from alembic.ini. Building a separate engine here silently
+    lost the SSL requirement, which is exactly why `alembic upgrade head`
+    failed during the Render build step.
     """
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
+    import database  # project's own engine, already configured for TiDB Cloud
+
+    connectable = database.engine
 
     with connectable.connect() as connection:
         context.configure(
