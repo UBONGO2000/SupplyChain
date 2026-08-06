@@ -72,9 +72,19 @@ def create_default_users():
 # ============================================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup events."""
-    models.Base.metadata.create_all(bind=database.engine)
+    """Startup events.
+
+    Schema creation/updates are handled by Alembic migrations (run as part
+    of the Render build step: `alembic upgrade head`), NOT by create_all()
+    anymore. create_all() only creates missing tables and silently ignores
+    column changes on existing tables, which caused schema drift in
+    production. Alembic replaces it entirely.
+    """
     create_default_users()
+
+    from seed_data import seed_demo_data
+    seed_demo_data()
+
     yield
 
 
