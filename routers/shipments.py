@@ -34,7 +34,7 @@ def create_shipment(
     return db_shipment
 
 
-@router.get("", response_model=PaginatedResponse)
+@router.get("", response_model=PaginatedResponse[ShipmentResponse])
 def get_shipments(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),

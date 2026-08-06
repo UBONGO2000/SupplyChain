@@ -30,7 +30,7 @@ def create_warehouse(
     return db_warehouse
 
 
-@router.get("", response_model=PaginatedResponse)
+@router.get("", response_model=PaginatedResponse[WarehouseResponse])
 def get_warehouses(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),

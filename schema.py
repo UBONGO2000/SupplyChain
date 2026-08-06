@@ -18,7 +18,7 @@ Schemas follow a pattern:
 """
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
-from typing import Optional, List
+from typing import Optional, List, TypeVar, Generic
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
@@ -73,16 +73,27 @@ class PaginationParams(BaseModel):
         return self.page_size
 
 
-class PaginatedResponse(BaseModel):
-    """Standard paginated response wrapper"""
-    items: List
+T = TypeVar("T")
+
+
+class PaginatedResponse(BaseModel, Generic[T]):
+    """Standard paginated response wrapper.
+
+    Generic on purpose: without a type parameter, Pydantic has no schema to
+    convert SQLAlchemy ORM objects into JSON, and silently accepts them at
+    construction time (List with no type arg = permissive) only to fail at
+    serialization time with "Unable to serialize unknown type". This only
+    surfaces once a table actually has rows -- an empty list serializes fine
+    either way, which is why this stayed hidden until real data was seeded.
+    """
+    items: List[T]
     total: int
     page: int
     page_size: int
     total_pages: int
-    
+
     @classmethod
-    def create(cls, items: List, total: int, page: int, page_size: int):
+    def create(cls, items: List[T], total: int, page: int, page_size: int):
         total_pages = (total + page_size - 1) // page_size
         return cls(
             items=items,

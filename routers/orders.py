@@ -94,7 +94,7 @@ def create_order(
     return db_order
 
 
-@router.get("", response_model=PaginatedResponse)
+@router.get("", response_model=PaginatedResponse[OrderResponse])
 def get_orders(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),

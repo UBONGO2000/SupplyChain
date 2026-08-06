@@ -40,7 +40,7 @@ def create_product(
     return db_product
 
 
-@router.get("", response_model=PaginatedResponse)
+@router.get("", response_model=PaginatedResponse[ProductResponse])
 def get_products(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),

@@ -56,7 +56,7 @@ def create_inventory(
     return db_inventory
 
 
-@router.get("", response_model=PaginatedResponse)
+@router.get("", response_model=PaginatedResponse[InventoryResponse])
 def get_inventory(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -84,7 +84,7 @@ def get_inventory(
     return PaginatedResponse.create(items, total, page, page_size)
 
 
-@router.get("/warehouse/{warehouse_id}", response_model=PaginatedResponse)
+@router.get("/warehouse/{warehouse_id}", response_model=PaginatedResponse[InventoryResponse])
 def get_warehouse_inventory(
     warehouse_id: int,
     page: int = Query(1, ge=1),
