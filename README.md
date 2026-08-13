@@ -48,6 +48,13 @@ SupplyChain/
 │   ├── shipments.py        # CRUD expéditions
 │   ├── orders.py           # CRUD commandes + réservation stock
 │   └── analytics.py        # Rapports et statistiques
+├── tests/
+│   ├── conftest.py         # Fixtures pytest (DB SQLite isolée par test)
+│   ├── test_auth.py        # Auth, JWT, RBAC, 401 sur routes protégées
+│   ├── test_orders.py      # Calcul des totaux, réservation stock, IDOR
+│   ├── test_inventory.py   # Ajustements de stock, intégrité des données
+│   └── test_health.py      # Endpoint /health
+├── pytest.ini              # Config pytest (pythonpath, testpaths)
 ├── requirements.txt        # Dépendances de production
 ├── dev-requirements.txt    # Dépendances de développement
 ├── runtime.txt             # Version Python
@@ -118,6 +125,36 @@ pip install -r requirements.txt && alembic upgrade head
 `seed_data.py` peuple la base avec un jeu de données réaliste (3 entrepôts, 4 fournisseurs, 10 produits, 10 lignes de stock — dont volontairement 2 en stock faible pour tester les alertes —, 3 expéditions et 2 commandes). Cette fonction est appelée automatiquement au démarrage de l'application (voir `lifespan` dans `main.py`) et est **idempotente** : elle ne fait rien si des entrepôts existent déjà en base, donc aucun risque de doublon à chaque redéploiement.
 
 But : permettre de tester immédiatement tous les endpoints (Postman, Swagger, ou un futur frontend) sans avoir à créer des données à la main.
+
+---
+
+## Tests automatisés
+
+Suite de 42 tests (`pytest`) couvrant l'authentification, la logique métier des commandes et l'intégrité des stocks.
+
+### Lancer les tests
+
+```bash
+pip install -r requirements.txt -r dev-requirements.txt
+pytest -v
+```
+
+Aucune base MySQL réelle n'est nécessaire : `tests/conftest.py` redirige la dépendance `get_db` de l'application vers une base **SQLite en mémoire**, recréée à zéro avant chaque test. `DATABASE_URL` reste défini avec une URL MySQL factice (jamais contactée) uniquement pour satisfaire la validation au démarrage de `config.py`.
+
+### Couverture
+
+| Fichier | Couvre |
+|---------|--------|
+| `test_auth.py` | Inscription (doublons, hash du mot de passe, rôle assigné), login (mauvais mot de passe, compte désactivé), JWT (expiré, malformé, altéré), RBAC (`require_role`), 401 sur toutes les routes protégées |
+| `test_orders.py` | Calcul du total (taxe 20 %, seuil de livraison gratuite à 100 €, remises), réservation de stock, 404 sur produit/utilisateur inconnu, visibilité des commandes par rôle, IDOR sur `get_order` |
+| `test_inventory.py` | Ajustements positifs/négatifs (avec vérification qu'un ajustement rejeté ne modifie rien en base), doublon d'inventaire, permissions staff/viewer |
+| `test_health.py` | `/health` accessible sans authentification et reflet correct de l'état de la connexion DB |
+
+### Bugs identifiés et corrigés grâce à cette suite
+
+1. **Commande sans stock disponible acceptée silencieusement** (`routers/orders.py`) — une commande sur un produit sans aucun enregistrement d'inventaire suffisant était créée sans réservation, sans erreur. Corrigé : renvoie désormais **409 Conflict**, la commande n'est pas créée.
+2. **Collision de numéro de commande** (`routers/orders.py`) — `order_number` était généré à partir d'un timestamp en secondes ; deux commandes créées dans la même seconde produisaient le même numéro et la seconde échouait avec une erreur 500 (contrainte UNIQUE). Corrigé en ajoutant un suffixe UUID.
+3. **Rôle utilisateur stocké de façon incorrecte** (`routers/auth.py`, `main.py`) — le rôle était assigné comme chaîne brute en minuscules (`"staff"`) à une colonne `Enum(UserRole)` qui attend le nom de l'enum (`"STAFF"`). Sur MySQL ce défaut passait inaperçu grâce à la normalisation insensible à la casse des colonnes ENUM natives, mais restait un point fragile pouvant faire échouer la lecture d'un utilisateur (donc le login) sur un autre moteur ou après un changement de collation. Corrigé en assignant un véritable membre d'enum (`models.UserRole(...)`).
 
 ---
 
@@ -305,8 +342,8 @@ Créés automatiquement au premier démarrage :
 | Méthode | Endpoint | Description | Accès |
 |---------|----------|-------------|-------|
 | GET | `/api/orders` | Liste (les utilisateurs voient les leurs) | Authentifié |
-| POST | `/api/orders` | Créer (réservation auto du stock) | Authentifié |
-| GET | `/api/orders/{id}` | Détail | Propriétaire/Admin |
+| POST | `/api/orders` | Créer (réservation auto du stock, 409 si stock insuffisant) | Authentifié |
+| GET | `/api/orders/{id}` | Détail (403 si ce n'est pas le propriétaire, sauf Admin/Manager) | Propriétaire/Admin |
 
 ### Expéditions
 
@@ -388,6 +425,7 @@ curl -X POST "https://supplychain-39y0.onrender.com/api/orders" \
 | Hachage mot de passe | bcrypt |
 | Validation | Pydantic 2.6 |
 | Migrations | Alembic |
+| Tests | Pytest + FastAPI TestClient (SQLite en mémoire) |
 | Serveur prod | Gunicorn + Uvicorn workers |
 | Pool connexions | QueuePool (10+20 overflow) |
 | Backend deploy | Render |

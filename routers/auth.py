@@ -43,7 +43,7 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
         username=user.username,
         hashed_password=hashed_password,
         full_name=user.full_name,
-        role=user.role.value,
+        role=models.UserRole(user.role.value),
         is_active=True,
     )
     db.add(db_user)

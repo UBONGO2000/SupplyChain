@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, desc
 from decimal import Decimal
 from datetime import datetime
+from uuid import uuid4
 
 import models
 from schema import (
@@ -40,6 +41,19 @@ def create_order(
         if not product:
             raise HTTPException(status_code=404, detail=f"Product {item.product_id} not found")
 
+        available_inventory = db.query(models.Inventory).filter(
+            and_(
+                models.Inventory.product_id == item.product_id,
+                models.Inventory.available_quantity >= item.quantity,
+            )
+        ).first()
+        if not available_inventory:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Insufficient stock for product {item.product_id}: "
+                       f"requested {item.quantity}, none available",
+            )
+
         discount_amount = item.unit_price * (item.discount_percent / 100)
         line_total = (item.unit_price - discount_amount) * item.quantity
         subtotal += line_total
@@ -57,7 +71,7 @@ def create_order(
     shipping_cost = Decimal("10.00") if subtotal < Decimal("100.00") else Decimal("0.00")
     total_amount = subtotal + tax_amount + shipping_cost
 
-    order_number = f"ORD-{datetime.utcnow().strftime('%Y%m%d')}-{int(datetime.utcnow().timestamp())}"
+    order_number = f"ORD-{datetime.utcnow().strftime('%Y%m%d')}-{uuid4().hex[:10].upper()}"
 
     db_order = models.Order(
         order_number=order_number,

@@ -54,7 +54,7 @@ def create_default_users():
                     username=user_data["username"],
                     hashed_password=hashed_password,
                     full_name=user_data["full_name"],
-                    role=user_data["role"],
+                    role=models.UserRole(user_data["role"]),
                     is_active=True,
                 )
                 db.add(new_user)
