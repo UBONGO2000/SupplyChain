@@ -130,7 +130,7 @@ But : permettre de tester immédiatement tous les endpoints (Postman, Swagger, o
 
 ## Tests automatisés
 
-Suite de 42 tests (`pytest`) couvrant l'authentification, la logique métier des commandes et l'intégrité des stocks.
+Suite de **42 tests** (`pytest`), **100 % de réussite**, couvrant l'authentification, la logique métier des commandes et l'intégrité des stocks.
 
 ### Lancer les tests
 
@@ -141,14 +141,35 @@ pytest -v
 
 Aucune base MySQL réelle n'est nécessaire : `tests/conftest.py` redirige la dépendance `get_db` de l'application vers une base **SQLite en mémoire**, recréée à zéro avant chaque test. `DATABASE_URL` reste défini avec une URL MySQL factice (jamais contactée) uniquement pour satisfaire la validation au démarrage de `config.py`.
 
-### Couverture
+### Répartition des tests par fichier
 
-| Fichier | Couvre |
-|---------|--------|
-| `test_auth.py` | Inscription (doublons, hash du mot de passe, rôle assigné), login (mauvais mot de passe, compte désactivé), JWT (expiré, malformé, altéré), RBAC (`require_role`), 401 sur toutes les routes protégées |
-| `test_orders.py` | Calcul du total (taxe 20 %, seuil de livraison gratuite à 100 €, remises), réservation de stock, 404 sur produit/utilisateur inconnu, visibilité des commandes par rôle, IDOR sur `get_order` |
-| `test_inventory.py` | Ajustements positifs/négatifs (avec vérification qu'un ajustement rejeté ne modifie rien en base), doublon d'inventaire, permissions staff/viewer |
-| `test_health.py` | `/health` accessible sans authentification et reflet correct de l'état de la connexion DB |
+| Fichier | Nb de tests | Couvre |
+|---------|:-:|--------|
+| `test_auth.py` | 20 | Inscription (doublons, hash du mot de passe, rôle assigné), login (mauvais mot de passe, compte désactivé), JWT (expiré, malformé, altéré), RBAC (`require_role`), 401 sur 7 routes protégées |
+| `test_orders.py` | 12 | Calcul du total (taxe 20 %, seuil de livraison gratuite à 100 €, remises), réservation de stock, 404 sur produit/utilisateur inconnu, visibilité des commandes par rôle, IDOR sur `get_order` |
+| `test_inventory.py` | 7 | Ajustements positifs/négatifs (avec vérification qu'un ajustement rejeté ne modifie rien en base), doublon d'inventaire, permissions staff/viewer |
+| `test_health.py` | 3 | `/health` accessible sans authentification et reflet correct de l'état de la connexion DB |
+| **Total** | **42** | |
+
+### Couverture de code
+
+Mesurée avec `pytest-cov` :
+
+```bash
+pytest --cov=. --cov-report=term-missing
+```
+
+| Module | Couverture | Détail |
+|--------|:-:|--------|
+| `routers/auth.py` | **100 %** | Register, login, `/me` entièrement couverts |
+| `routers/orders.py` | **97 %** | Totaux, réservation de stock, visibilité, IDOR — seules 2 lignes non exécutées (branche défensive) |
+| `models.py` | 95 % | Modèles ORM exercés indirectement via les routes testées |
+| `schema.py` | 98 % | Validation Pydantic exercée par les payloads de test |
+| `routers/inventory.py` | 71 % | Création, ajustement, permissions couverts ; listing/pagination non testés (hors périmètre) |
+| `auth.py` (module JWT/RBAC) | 77 % | `create_access_token`, `decode_token`, `require_role` couverts ; `create_refresh_token` non utilisé/non testé |
+| **Total du projet** | **81 %** | |
+
+Les routers `products.py`, `warehouses.py`, `suppliers.py`, `shipments.py` et `analytics.py` (33–52 % de couverture) ne faisaient pas partie du périmètre demandé (Auth, Orders, Inventory) et n'ont donc pas de tests dédiés à ce stade. `seed_data.py` (0 %) est un script de peuplement de données de démo, non testé par nature.
 
 ### Bugs identifiés et corrigés grâce à cette suite
 
