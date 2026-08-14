@@ -6,6 +6,7 @@ an order for a product with zero matching inventory is silently created
 with no reservation and no error), 404s on bad references, and
 order-visibility / IDOR checks.
 """
+
 from decimal import Decimal
 
 import models
@@ -35,12 +36,16 @@ def _item(product_id, quantity, unit_price, discount_percent="0.00"):
 # Total calculation
 # ============================================
 class TestOrderTotals:
-    def test_totals_below_free_shipping_threshold(self, client, staff_user, db_session, warehouse):
+    def test_totals_below_free_shipping_threshold(
+        self, client, staff_user, db_session, warehouse
+    ):
         product = make_product(db_session, sku="CALC-1", unit_price="20.00")
         make_inventory(db_session, warehouse, product, quantity=50)
 
         payload = _order_payload(staff_user.id, [_item(product.id, 2, "20.00")])
-        resp = client.post("/api/orders", json=payload, headers=auth_headers(staff_user))
+        resp = client.post(
+            "/api/orders", json=payload, headers=auth_headers(staff_user)
+        )
 
         assert resp.status_code == 201
         body = resp.json()
@@ -50,12 +55,16 @@ class TestOrderTotals:
         assert Decimal(body["shipping_cost"]) == Decimal("10.00")
         assert Decimal(body["total_amount"]) == Decimal("58.00")
 
-    def test_totals_at_or_above_free_shipping_threshold(self, client, staff_user, db_session, warehouse):
+    def test_totals_at_or_above_free_shipping_threshold(
+        self, client, staff_user, db_session, warehouse
+    ):
         product = make_product(db_session, sku="CALC-2", unit_price="50.00")
         make_inventory(db_session, warehouse, product, quantity=50)
 
         payload = _order_payload(staff_user.id, [_item(product.id, 2, "50.00")])
-        resp = client.post("/api/orders", json=payload, headers=auth_headers(staff_user))
+        resp = client.post(
+            "/api/orders", json=payload, headers=auth_headers(staff_user)
+        )
 
         assert resp.status_code == 201
         body = resp.json()
@@ -72,7 +81,9 @@ class TestOrderTotals:
         payload = _order_payload(
             staff_user.id, [_item(product.id, 1, "100.00", discount_percent="10.00")]
         )
-        resp = client.post("/api/orders", json=payload, headers=auth_headers(staff_user))
+        resp = client.post(
+            "/api/orders", json=payload, headers=auth_headers(staff_user)
+        )
 
         assert resp.status_code == 201
         body = resp.json()
@@ -92,7 +103,9 @@ class TestOrderTotals:
             staff_user.id,
             [_item(p1.id, 1, "30.00"), _item(p2.id, 2, "45.00")],
         )
-        resp = client.post("/api/orders", json=payload, headers=auth_headers(staff_user))
+        resp = client.post(
+            "/api/orders", json=payload, headers=auth_headers(staff_user)
+        )
 
         assert resp.status_code == 201
         body = resp.json()
@@ -110,11 +123,15 @@ class TestStockReservation:
         self, client, staff_user, db_session, warehouse
     ):
         product = make_product(db_session, sku="RES-1", unit_price="15.00")
-        inv = make_inventory(db_session, warehouse, product, quantity=50, reserved_quantity=5)
+        inv = make_inventory(
+            db_session, warehouse, product, quantity=50, reserved_quantity=5
+        )
         # available_quantity starts at 45
 
         payload = _order_payload(staff_user.id, [_item(product.id, 7, "15.00")])
-        resp = client.post("/api/orders", json=payload, headers=auth_headers(staff_user))
+        resp = client.post(
+            "/api/orders", json=payload, headers=auth_headers(staff_user)
+        )
 
         assert resp.status_code == 201
 
@@ -140,7 +157,9 @@ class TestStockReservation:
         order_items_before = db_session.query(models.OrderItem).count()
 
         payload = _order_payload(staff_user.id, [_item(product.id, 1, "10.00")])
-        resp = client.post("/api/orders", json=payload, headers=auth_headers(staff_user))
+        resp = client.post(
+            "/api/orders", json=payload, headers=auth_headers(staff_user)
+        )
 
         assert resp.status_code in (400, 409)
         assert db_session.query(models.Order).count() == orders_before
@@ -148,16 +167,22 @@ class TestStockReservation:
 
     def test_unknown_product_id_returns_404(self, client, staff_user):
         payload = _order_payload(staff_user.id, [_item(999999, 1, "10.00")])
-        resp = client.post("/api/orders", json=payload, headers=auth_headers(staff_user))
+        resp = client.post(
+            "/api/orders", json=payload, headers=auth_headers(staff_user)
+        )
 
         assert resp.status_code == 404
 
-    def test_unknown_user_id_returns_404(self, client, staff_user, db_session, warehouse):
+    def test_unknown_user_id_returns_404(
+        self, client, staff_user, db_session, warehouse
+    ):
         product = make_product(db_session, sku="UNK-USER", unit_price="10.00")
         make_inventory(db_session, warehouse, product, quantity=50)
 
         payload = _order_payload(999999, [_item(product.id, 1, "10.00")])
-        resp = client.post("/api/orders", json=payload, headers=auth_headers(staff_user))
+        resp = client.post(
+            "/api/orders", json=payload, headers=auth_headers(staff_user)
+        )
 
         assert resp.status_code == 404
 
@@ -192,7 +217,9 @@ class TestOrderVisibility:
         assert body["total"] == 1
         assert all(item["user_id"] == user_a.id for item in body["items"])
 
-    def test_admin_can_filter_orders_by_user_id(self, client, db_session, warehouse, admin_user):
+    def test_admin_can_filter_orders_by_user_id(
+        self, client, db_session, warehouse, admin_user
+    ):
         user_a = make_user(db_session, "order_user_c")
         user_b = make_user(db_session, "order_user_d")
         product = make_product(db_session, sku="VIS-2", unit_price="10.00")
@@ -209,7 +236,9 @@ class TestOrderVisibility:
             headers=auth_headers(user_b),
         )
 
-        resp = client.get(f"/api/orders?user_id={user_b.id}", headers=auth_headers(admin_user))
+        resp = client.get(
+            f"/api/orders?user_id={user_b.id}", headers=auth_headers(admin_user)
+        )
 
         assert resp.status_code == 200
         body = resp.json()
@@ -235,7 +264,9 @@ class TestOrderVisibility:
 
         assert resp.status_code == 403
 
-    def test_admin_can_access_any_order(self, client, db_session, warehouse, admin_user):
+    def test_admin_can_access_any_order(
+        self, client, db_session, warehouse, admin_user
+    ):
         owner = make_user(db_session, "order_owner_2")
         product = make_product(db_session, sku="IDOR-2", unit_price="10.00")
         make_inventory(db_session, warehouse, product, quantity=50)

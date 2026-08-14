@@ -12,8 +12,11 @@ from pydantic import BaseModel
 import models
 from schema import UserCreate, UserResponse, TokenResponse
 from auth import (
-    get_password_hash, verify_password, create_access_token,
-    ACCESS_TOKEN_EXPIRE_MINUTES, get_current_user,
+    get_password_hash,
+    verify_password,
+    create_access_token,
+    ACCESS_TOKEN_EXPIRE_MINUTES,
+    get_current_user,
 )
 from database import get_db
 
@@ -22,20 +25,31 @@ router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
 class LoginRequest(BaseModel):
     """Login request body (JSON)"""
+
     username: str
     password: str
 
 
-@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED
+)
 def register_user(user: UserCreate, db: Session = Depends(get_db)):
     """Register a new user."""
-    existing_email = db.query(models.User).filter(models.User.email == user.email).first()
+    existing_email = (
+        db.query(models.User).filter(models.User.email == user.email).first()
+    )
     if existing_email:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
+        )
 
-    existing_username = db.query(models.User).filter(models.User.username == user.username).first()
+    existing_username = (
+        db.query(models.User).filter(models.User.username == user.username).first()
+    )
     if existing_username:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username already taken")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Username already taken"
+        )
 
     hashed_password = get_password_hash(user.password)
     db_user = models.User(
@@ -55,12 +69,16 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
 @router.post("/login", response_model=TokenResponse)
 def login(body: LoginRequest, db: Session = Depends(get_db)):
     """Authenticate user and return JWT token. Accepts JSON."""
-    user = db.query(models.User).filter(
-        or_(
-            models.User.username == body.username,
-            models.User.email == body.username,
+    user = (
+        db.query(models.User)
+        .filter(
+            or_(
+                models.User.username == body.username,
+                models.User.email == body.username,
+            )
         )
-    ).first()
+        .first()
+    )
 
     if not user or not verify_password(body.password, user.hashed_password):
         raise HTTPException(
@@ -70,7 +88,9 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
         )
 
     if not user.is_active:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is disabled")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="User account is disabled"
+        )
 
     access_token = create_access_token(
         data={"sub": user.username, "user_id": user.id, "role": user.role.value}
@@ -78,7 +98,7 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
 
     return TokenResponse(
         access_token=access_token,
-        token_type="bearer",
+        token_type="bearer",  # nosec B106 -- OAuth2 spec token type, not a credential
         expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         user=user,
     )

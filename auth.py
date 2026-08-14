@@ -111,7 +111,10 @@ def require_role(allowed_roles: List[str]):
         def admin_endpoint(current_user: User = Depends(require_role(["admin"]))):
             ...
     """
-    def role_checker(current_user: models.User = Depends(get_current_user)) -> models.User:
+
+    def role_checker(
+        current_user: models.User = Depends(get_current_user),
+    ) -> models.User:
         if current_user.role.value not in allowed_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -125,16 +128,22 @@ def require_role(allowed_roles: List[str]):
 # ============================================
 # Utility Functions
 # ============================================
-def authenticate_user(db: Session, username: str, password: str) -> Optional[models.User]:
+def authenticate_user(
+    db: Session, username: str, password: str
+) -> Optional[models.User]:
     """Authenticate a user with username and password."""
     from sqlalchemy import or_
 
-    user = db.query(models.User).filter(
-        or_(
-            models.User.username == username,
-            models.User.email == username,
+    user = (
+        db.query(models.User)
+        .filter(
+            or_(
+                models.User.username == username,
+                models.User.email == username,
+            )
         )
-    ).first()
+        .first()
+    )
 
     if not user:
         return None

@@ -28,21 +28,23 @@ def get_inventory_summary(
     Get inventory summary by warehouse.
     Shows total products, quantities, and value per warehouse using SQL aggregation with JOINs.
     """
-    results = db.query(
-        models.Warehouse.id,
-        models.Warehouse.name,
-        func.count(models.Inventory.product_id).label("total_products"),
-        func.sum(models.Inventory.quantity).label("total_quantity"),
-        func.sum(models.Inventory.quantity * models.Product.unit_price).label("total_value"),
-        models.Warehouse.capacity_m3,
-        models.Warehouse.current_utilization,
-    ).join(
-        models.Inventory, models.Warehouse.id == models.Inventory.warehouse_id
-    ).join(
-        models.Product, models.Inventory.product_id == models.Product.id
-    ).group_by(
-        models.Warehouse.id
-    ).all()
+    results = (
+        db.query(
+            models.Warehouse.id,
+            models.Warehouse.name,
+            func.count(models.Inventory.product_id).label("total_products"),
+            func.sum(models.Inventory.quantity).label("total_quantity"),
+            func.sum(models.Inventory.quantity * models.Product.unit_price).label(
+                "total_value"
+            ),
+            models.Warehouse.capacity_m3,
+            models.Warehouse.current_utilization,
+        )
+        .join(models.Inventory, models.Warehouse.id == models.Inventory.warehouse_id)
+        .join(models.Product, models.Inventory.product_id == models.Product.id)
+        .group_by(models.Warehouse.id)
+        .all()
+    )
 
     return [
         InventorySummary(
@@ -76,14 +78,19 @@ def get_sales_summary(
         query = query.filter(models.Order.ordered_at <= end_date)
 
     total_orders = query.count()
-    total_revenue = query.with_entities(func.sum(models.Order.total_amount)).scalar() or Decimal("0")
+    total_revenue = query.with_entities(
+        func.sum(models.Order.total_amount)
+    ).scalar() or Decimal("0")
 
-    avg_order_value = Decimal("0") if total_orders == 0 else total_revenue / total_orders
+    avg_order_value = (
+        Decimal("0") if total_orders == 0 else total_revenue / total_orders
+    )
 
-    status_counts = db.query(
-        models.Order.status,
-        func.count(models.Order.id)
-    ).group_by(models.Order.status).all()
+    status_counts = (
+        db.query(models.Order.status, func.count(models.Order.id))
+        .group_by(models.Order.status)
+        .all()
+    )
 
     orders_by_status = {status.value: count for status, count in status_counts}
 
@@ -104,21 +111,21 @@ def get_low_stock_alerts(
     Get all products below reorder point.
     Uses subquery to find products needing reorder.
     """
-    results = db.query(
-        models.Product.id.label("product_id"),
-        models.Product.name.label("product_name"),
-        models.Product.sku.label("sku"),
-        models.Inventory.warehouse_id.label("warehouse_id"),
-        models.Warehouse.name.label("warehouse_name"),
-        models.Inventory.quantity.label("quantity"),
-        models.Inventory.reorder_level.label("reorder_level"),
-    ).join(
-        models.Inventory, models.Product.id == models.Inventory.product_id
-    ).join(
-        models.Warehouse, models.Inventory.warehouse_id == models.Warehouse.id
-    ).filter(
-        models.Inventory.quantity < models.Inventory.reorder_level
-    ).all()
+    results = (
+        db.query(
+            models.Product.id.label("product_id"),
+            models.Product.name.label("product_name"),
+            models.Product.sku.label("sku"),
+            models.Inventory.warehouse_id.label("warehouse_id"),
+            models.Warehouse.name.label("warehouse_name"),
+            models.Inventory.quantity.label("quantity"),
+            models.Inventory.reorder_level.label("reorder_level"),
+        )
+        .join(models.Inventory, models.Product.id == models.Inventory.product_id)
+        .join(models.Warehouse, models.Inventory.warehouse_id == models.Warehouse.id)
+        .filter(models.Inventory.quantity < models.Inventory.reorder_level)
+        .all()
+    )
 
     return [
         LowStockAlert(
@@ -141,22 +148,22 @@ def get_top_products(
     current_user: models.User = Depends(get_current_user),
 ):
     """Get top selling products by order quantity. Uses complex join and aggregation."""
-    results = db.query(
-        models.Product.id,
-        models.Product.name,
-        models.Product.sku,
-        models.Product.category,
-        func.sum(models.OrderItem.quantity).label("total_sold"),
-        func.count(models.OrderItem.order_id).label("order_count"),
-    ).join(
-        models.OrderItem, models.Product.id == models.OrderItem.product_id
-    ).join(
-        models.Order, models.OrderItem.order_id == models.Order.id
-    ).group_by(
-        models.Product.id
-    ).order_by(
-        desc("total_sold")
-    ).limit(limit).all()
+    results = (
+        db.query(
+            models.Product.id,
+            models.Product.name,
+            models.Product.sku,
+            models.Product.category,
+            func.sum(models.OrderItem.quantity).label("total_sold"),
+            func.count(models.OrderItem.order_id).label("order_count"),
+        )
+        .join(models.OrderItem, models.Product.id == models.OrderItem.product_id)
+        .join(models.Order, models.OrderItem.order_id == models.Order.id)
+        .group_by(models.Product.id)
+        .order_by(desc("total_sold"))
+        .limit(limit)
+        .all()
+    )
 
     return [
         {
@@ -180,20 +187,20 @@ def get_supplier_performance(
     Get supplier performance metrics.
     Shows supplier ratings, on-time delivery, and order counts.
     """
-    results = db.query(
-        models.Supplier.id,
-        models.Supplier.company_name,
-        models.Supplier.country,
-        models.Supplier.rating,
-        models.Supplier.on_time_delivery_rate,
-        func.count(models.Shipment.id).label("shipment_count"),
-    ).outerjoin(
-        models.Shipment, models.Supplier.id == models.Shipment.supplier_id
-    ).group_by(
-        models.Supplier.id
-    ).order_by(
-        desc(models.Supplier.rating)
-    ).all()
+    results = (
+        db.query(
+            models.Supplier.id,
+            models.Supplier.company_name,
+            models.Supplier.country,
+            models.Supplier.rating,
+            models.Supplier.on_time_delivery_rate,
+            func.count(models.Shipment.id).label("shipment_count"),
+        )
+        .outerjoin(models.Shipment, models.Supplier.id == models.Shipment.supplier_id)
+        .group_by(models.Supplier.id)
+        .order_by(desc(models.Supplier.rating))
+        .all()
+    )
 
     return [
         {

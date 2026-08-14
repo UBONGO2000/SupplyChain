@@ -10,6 +10,7 @@ Strategy:
   actual test I/O. This keeps database.py untouched while giving each test a
   clean, fast, isolated database.
 """
+
 import os
 import sys
 from decimal import Decimal
@@ -18,7 +19,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 os.environ.setdefault("DATABASE_URL", "mysql+pymysql://user:pass@127.0.0.1:3306/testdb")
-os.environ.setdefault("SECRET_KEY", "test-only-secret-key-not-for-production-use-32chars")
+os.environ.setdefault(
+    "SECRET_KEY", "test-only-secret-key-not-for-production-use-32chars"
+)
 os.environ.setdefault("ACCESS_TOKEN_EXPIRE_MINUTES", "30")
 
 import pytest
@@ -83,8 +86,14 @@ def client():
 # ============================================
 # Domain fixtures
 # ============================================
-def make_user(db_session, username, role="staff", password="Passw0rd123",
-              email=None, is_active=True):
+def make_user(
+    db_session,
+    username,
+    role="staff",
+    password="Passw0rd123",
+    email=None,
+    is_active=True,
+):
     user = models.User(
         email=email or f"{username}@example.com",
         username=username,
@@ -113,7 +122,9 @@ def admin_user(db_session):
 
 @pytest.fixture
 def manager_user(db_session):
-    return make_user(db_session, "manager_test", role="manager", password="ManagerPass1")
+    return make_user(
+        db_session, "manager_test", role="manager", password="ManagerPass1"
+    )
 
 
 @pytest.fixture
@@ -128,7 +139,9 @@ def viewer_user(db_session):
 
 @pytest.fixture
 def warehouse(db_session):
-    wh = models.Warehouse(name="Main Warehouse", location="Paris", capacity_m3=Decimal("1000.00"))
+    wh = models.Warehouse(
+        name="Main Warehouse", location="Paris", capacity_m3=Decimal("1000.00")
+    )
     db_session.add(wh)
     db_session.commit()
     db_session.refresh(wh)

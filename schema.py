@@ -61,13 +61,16 @@ class OrderStatusEnum(str, Enum):
 # ============================================
 class PaginationParams(BaseModel):
     """Standard pagination parameters"""
+
     page: int = Field(default=1, ge=1, description="Page number (starts at 1)")
-    page_size: int = Field(default=20, ge=1, le=100, description="Items per page (max 100)")
-    
+    page_size: int = Field(
+        default=20, ge=1, le=100, description="Items per page (max 100)"
+    )
+
     @property
     def offset(self) -> int:
         return (self.page - 1) * self.page_size
-    
+
     @property
     def limit(self) -> int:
         return self.page_size
@@ -86,6 +89,7 @@ class PaginatedResponse(BaseModel, Generic[T]):
     surfaces once a table actually has rows -- an empty list serializes fine
     either way, which is why this stayed hidden until real data was seeded.
     """
+
     items: List[T]
     total: int
     page: int
@@ -100,12 +104,13 @@ class PaginatedResponse(BaseModel, Generic[T]):
             total=total,
             page=page,
             page_size=page_size,
-            total_pages=total_pages
+            total_pages=total_pages,
         )
 
 
 class MessageResponse(BaseModel):
     """Standard message response"""
+
     message: str
     success: bool = True
 
@@ -115,6 +120,7 @@ class MessageResponse(BaseModel):
 # ============================================
 class UserBase(BaseModel):
     """Base fields for user operations"""
+
     email: EmailStr
     username: str = Field(..., min_length=3, max_length=100)
     full_name: Optional[str] = Field(None, max_length=200)
@@ -123,23 +129,25 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     """Fields required to create a new user"""
+
     password: str = Field(..., min_length=8, max_length=100)
-    
-    @field_validator('password')
+
+    @field_validator("password")
     @classmethod
     def validate_password_strength(cls, v: str) -> str:
         """Ensure password meets complexity requirements"""
         if not any(c.isupper() for c in v):
-            raise ValueError('Password must contain at least one uppercase letter')
+            raise ValueError("Password must contain at least one uppercase letter")
         if not any(c.islower() for c in v):
-            raise ValueError('Password must contain at least one lowercase letter')
+            raise ValueError("Password must contain at least one lowercase letter")
         if not any(c.isdigit() for c in v):
-            raise ValueError('Password must contain at least one digit')
+            raise ValueError("Password must contain at least one digit")
         return v
 
 
 class UserUpdate(BaseModel):
     """Fields for updating a user (all optional)"""
+
     email: Optional[EmailStr] = None
     username: Optional[str] = Field(None, min_length=3, max_length=100)
     full_name: Optional[str] = Field(None, max_length=200)
@@ -150,24 +158,27 @@ class UserUpdate(BaseModel):
 
 class UserResponse(UserBase):
     """User response (excludes password)"""
+
     id: int
     is_active: bool
     is_verified: bool
     created_at: datetime
     updated_at: Optional[datetime] = None
-    
+
     class Config:
         from_attributes = True
 
 
 class UserLogin(BaseModel):
     """Login request"""
+
     username: str
     password: str
 
 
 class TokenResponse(BaseModel):
     """JWT token response"""
+
     access_token: str
     token_type: str = "bearer"
     expires_in: int
@@ -179,6 +190,7 @@ class TokenResponse(BaseModel):
 # ============================================
 class WarehouseBase(BaseModel):
     """Base fields for warehouse"""
+
     name: str = Field(..., min_length=1, max_length=100)
     location: Optional[str] = Field(None, max_length=255)
     address: Optional[str] = None
@@ -188,11 +200,13 @@ class WarehouseBase(BaseModel):
 
 class WarehouseCreate(WarehouseBase):
     """Fields required to create warehouse"""
+
     is_active: bool = True
 
 
 class WarehouseUpdate(BaseModel):
     """Fields for updating warehouse"""
+
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     location: Optional[str] = Field(None, max_length=255)
     address: Optional[str] = None
@@ -203,11 +217,12 @@ class WarehouseUpdate(BaseModel):
 
 class WarehouseResponse(WarehouseBase):
     """Full warehouse response"""
+
     id: int
     is_active: bool
     created_at: datetime
     updated_at: Optional[datetime] = None
-    
+
     class Config:
         from_attributes = True
 
@@ -217,6 +232,7 @@ class WarehouseResponse(WarehouseBase):
 # ============================================
 class SupplierBase(BaseModel):
     """Base fields for supplier"""
+
     company_name: str = Field(..., min_length=1, max_length=150)
     contact_name: Optional[str] = Field(None, max_length=200)
     contact_email: Optional[EmailStr] = None
@@ -229,11 +245,13 @@ class SupplierBase(BaseModel):
 
 class SupplierCreate(SupplierBase):
     """Fields required to create supplier"""
+
     is_active: bool = True
 
 
 class SupplierUpdate(BaseModel):
     """Fields for updating supplier"""
+
     company_name: Optional[str] = Field(None, min_length=1, max_length=150)
     contact_name: Optional[str] = Field(None, max_length=200)
     contact_email: Optional[EmailStr] = None
@@ -247,12 +265,13 @@ class SupplierUpdate(BaseModel):
 
 class SupplierResponse(SupplierBase):
     """Full supplier response"""
+
     id: int
     total_orders: int
     is_active: bool
     created_at: datetime
     updated_at: Optional[datetime] = None
-    
+
     class Config:
         from_attributes = True
 
@@ -262,6 +281,7 @@ class SupplierResponse(SupplierBase):
 # ============================================
 class ProductBase(BaseModel):
     """Base fields for product"""
+
     sku: str = Field(..., min_length=1, max_length=50)
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
@@ -276,11 +296,13 @@ class ProductBase(BaseModel):
 
 class ProductCreate(ProductBase):
     """Fields required to create product"""
+
     is_active: bool = True
 
 
 class ProductUpdate(BaseModel):
     """Fields for updating product"""
+
     sku: Optional[str] = Field(None, min_length=1, max_length=50)
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
@@ -296,17 +318,19 @@ class ProductUpdate(BaseModel):
 
 class ProductResponse(ProductBase):
     """Full product response"""
+
     id: int
     is_active: bool
     created_at: datetime
     updated_at: Optional[datetime] = None
-    
+
     class Config:
         from_attributes = True
 
 
 class ProductWithInventoryResponse(ProductResponse):
     """Product with inventory summary"""
+
     total_quantity: int = 0
     available_quantity: int = 0
     warehouses_count: int = 0
@@ -317,6 +341,7 @@ class ProductWithInventoryResponse(ProductResponse):
 # ============================================
 class InventoryBase(BaseModel):
     """Base fields for inventory"""
+
     warehouse_id: int
     product_id: int
     quantity: int = Field(default=0, ge=0)
@@ -328,11 +353,13 @@ class InventoryBase(BaseModel):
 
 class InventoryCreate(InventoryBase):
     """Fields required to create inventory record"""
+
     pass
 
 
 class InventoryUpdate(BaseModel):
     """Fields for updating inventory"""
+
     quantity: Optional[int] = Field(None, ge=0)
     reserved_quantity: Optional[int] = Field(None, ge=0)
     reorder_level: Optional[int] = Field(None, ge=0)
@@ -342,16 +369,20 @@ class InventoryUpdate(BaseModel):
 
 class InventoryResponse(InventoryBase):
     """Full inventory response"""
+
     available_quantity: int
     last_updated: datetime
-    
+
     class Config:
         from_attributes = True
 
 
 class InventoryAdjustRequest(BaseModel):
     """Request to adjust inventory quantity"""
-    adjustment: int = Field(..., description="Positive for additions, negative for deductions")
+
+    adjustment: int = Field(
+        ..., description="Positive for additions, negative for deductions"
+    )
     reason: Optional[str] = Field(None, max_length=500)
 
 
@@ -360,6 +391,7 @@ class InventoryAdjustRequest(BaseModel):
 # ============================================
 class ShipmentBase(BaseModel):
     """Base fields for shipment"""
+
     tracking_number: Optional[str] = Field(None, max_length=100)
     origin_warehouse_id: int
     supplier_id: Optional[int] = None
@@ -375,11 +407,13 @@ class ShipmentBase(BaseModel):
 
 class ShipmentCreate(ShipmentBase):
     """Fields required to create shipment"""
+
     pass
 
 
 class ShipmentUpdate(BaseModel):
     """Fields for updating shipment"""
+
     tracking_number: Optional[str] = Field(None, max_length=100)
     origin_warehouse_id: Optional[int] = None
     supplier_id: Optional[int] = None
@@ -396,10 +430,11 @@ class ShipmentUpdate(BaseModel):
 
 class ShipmentResponse(ShipmentBase):
     """Full shipment response"""
+
     id: int
     created_at: datetime
     updated_at: Optional[datetime] = None
-    
+
     class Config:
         from_attributes = True
 
@@ -409,6 +444,7 @@ class ShipmentResponse(ShipmentBase):
 # ============================================
 class OrderItemBase(BaseModel):
     """Base fields for order item"""
+
     product_id: int
     quantity: int = Field(..., ge=1)
     unit_price: Decimal = Field(..., ge=0)
@@ -417,21 +453,24 @@ class OrderItemBase(BaseModel):
 
 class OrderItemCreate(OrderItemBase):
     """Fields required to create order item"""
+
     pass
 
 
 class OrderItemResponse(OrderItemBase):
     """Full order item response"""
+
     id: int
     line_total: Decimal
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
 
 
 class OrderBase(BaseModel):
     """Base fields for order"""
+
     shipping_address: Optional[str] = None
     billing_address: Optional[str] = None
     notes: Optional[str] = None
@@ -439,19 +478,21 @@ class OrderBase(BaseModel):
 
 class OrderCreate(OrderBase):
     """Fields required to create order"""
+
     user_id: int
     items: List[OrderItemCreate] = Field(..., min_length=1)
-    
-    @field_validator('items')
+
+    @field_validator("items")
     @classmethod
     def validate_items_not_empty(cls, v: List) -> List:
         if not v:
-            raise ValueError('At least one item is required')
+            raise ValueError("At least one item is required")
         return v
 
 
 class OrderUpdate(BaseModel):
     """Fields for updating order"""
+
     status: Optional[OrderStatusEnum] = None
     shipping_address: Optional[str] = None
     billing_address: Optional[str] = None
@@ -462,6 +503,7 @@ class OrderUpdate(BaseModel):
 
 class OrderResponse(OrderBase):
     """Full order response"""
+
     id: int
     order_number: str
     user_id: int
@@ -476,7 +518,7 @@ class OrderResponse(OrderBase):
     created_at: datetime
     updated_at: Optional[datetime] = None
     order_items: List[OrderItemResponse] = []
-    
+
     class Config:
         from_attributes = True
 
@@ -486,6 +528,7 @@ class OrderResponse(OrderBase):
 # ============================================
 class InventorySummary(BaseModel):
     """Inventory summary by warehouse"""
+
     warehouse_id: int
     warehouse_name: str
     total_products: int
@@ -496,6 +539,7 @@ class InventorySummary(BaseModel):
 
 class SalesSummary(BaseModel):
     """Sales summary report"""
+
     total_orders: int
     total_revenue: Decimal
     average_order_value: Decimal
@@ -504,6 +548,7 @@ class SalesSummary(BaseModel):
 
 class LowStockAlert(BaseModel):
     """Low stock product alert"""
+
     product_id: int
     product_name: str
     sku: str

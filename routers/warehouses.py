@@ -9,7 +9,13 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
 import models
-from schema import WarehouseCreate, WarehouseResponse, WarehouseUpdate, PaginatedResponse, MessageResponse
+from schema import (
+    WarehouseCreate,
+    WarehouseResponse,
+    WarehouseUpdate,
+    PaginatedResponse,
+    MessageResponse,
+)
 from auth import get_current_user, require_role
 from database import get_db
 
@@ -65,7 +71,9 @@ def get_warehouse(
     current_user: models.User = Depends(get_current_user),
 ):
     """Get warehouse by ID."""
-    warehouse = db.query(models.Warehouse).filter(models.Warehouse.id == warehouse_id).first()
+    warehouse = (
+        db.query(models.Warehouse).filter(models.Warehouse.id == warehouse_id).first()
+    )
     if not warehouse:
         raise HTTPException(status_code=404, detail="Warehouse not found")
     return warehouse
@@ -79,7 +87,9 @@ def update_warehouse(
     current_user: models.User = Depends(require_role(["admin", "manager"])),
 ):
     """Update warehouse (Admin/Manager only)."""
-    db_warehouse = db.query(models.Warehouse).filter(models.Warehouse.id == warehouse_id).first()
+    db_warehouse = (
+        db.query(models.Warehouse).filter(models.Warehouse.id == warehouse_id).first()
+    )
     if not db_warehouse:
         raise HTTPException(status_code=404, detail="Warehouse not found")
 
@@ -99,11 +109,17 @@ def delete_warehouse(
     current_user: models.User = Depends(require_role(["admin"])),
 ):
     """Delete warehouse (Admin only)."""
-    warehouse = db.query(models.Warehouse).filter(models.Warehouse.id == warehouse_id).first()
+    warehouse = (
+        db.query(models.Warehouse).filter(models.Warehouse.id == warehouse_id).first()
+    )
     if not warehouse:
         raise HTTPException(status_code=404, detail="Warehouse not found")
 
-    inventory_count = db.query(models.Inventory).filter(models.Inventory.warehouse_id == warehouse_id).count()
+    inventory_count = (
+        db.query(models.Inventory)
+        .filter(models.Inventory.warehouse_id == warehouse_id)
+        .count()
+    )
     if inventory_count > 0:
         raise HTTPException(
             status_code=400,

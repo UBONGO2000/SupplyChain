@@ -21,7 +21,8 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 
 # API
-API_HOST = os.getenv("API_HOST", "0.0.0.0")
+# Binds all interfaces by default: intentional for the container/Render deploy target.
+API_HOST = os.getenv("API_HOST", "0.0.0.0")  # nosec B104
 API_PORT = int(os.getenv("API_PORT", "8000"))
 DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 

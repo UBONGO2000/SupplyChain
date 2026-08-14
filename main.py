@@ -34,19 +34,43 @@ def create_default_users():
 
     db = database.SessionLocal()
     try:
+        # nosec B105 (x4 below): these are the documented, public demo
+        # credentials listed in README.md, not real secrets.
         default_users = [
-            {"email": "admin@supplychain.com", "username": "admin", "password": "Admin123!",
-             "full_name": "System Administrator", "role": "admin"},
-            {"email": "manager@supplychain.com", "username": "manager", "password": "Manager123!",
-             "full_name": "Supply Chain Manager", "role": "manager"},
-            {"email": "staff@supplychain.com", "username": "staff", "password": "Staff123!",
-             "full_name": "Warehouse Staff", "role": "staff"},
-            {"email": "viewer@supplychain.com", "username": "viewer", "password": "Viewer123!",
-             "full_name": "Viewer User", "role": "viewer"},
+            {
+                "email": "admin@supplychain.com",
+                "username": "admin",
+                "password": "Admin123!",  # nosec B105
+                "full_name": "System Administrator",
+                "role": "admin",
+            },
+            {
+                "email": "manager@supplychain.com",
+                "username": "manager",
+                "password": "Manager123!",  # nosec B105
+                "full_name": "Supply Chain Manager",
+                "role": "manager",
+            },
+            {
+                "email": "staff@supplychain.com",
+                "username": "staff",
+                "password": "Staff123!",  # nosec B105
+                "full_name": "Warehouse Staff",
+                "role": "staff",
+            },
+            {
+                "email": "viewer@supplychain.com",
+                "username": "viewer",
+                "password": "Viewer123!",  # nosec B105
+                "full_name": "Viewer User",
+                "role": "viewer",
+            },
         ]
 
         for user_data in default_users:
-            existing_user = db.query(User).filter(User.username == user_data["username"]).first()
+            existing_user = (
+                db.query(User).filter(User.username == user_data["username"]).first()
+            )
             if not existing_user:
                 hashed_password = get_password_hash(user_data["password"])
                 new_user = User(
@@ -83,6 +107,7 @@ async def lifespan(app: FastAPI):
     create_default_users()
 
     from seed_data import seed_demo_data
+
     seed_demo_data()
 
     yield
@@ -138,5 +163,7 @@ def health_check():
     return {
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
-        "database": "connected" if database.check_database_connection() else "disconnected",
+        "database": (
+            "connected" if database.check_database_connection() else "disconnected"
+        ),
     }

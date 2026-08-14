@@ -61,7 +61,9 @@ def get_supplier(
     current_user: models.User = Depends(get_current_user),
 ):
     """Get supplier by ID."""
-    supplier = db.query(models.Supplier).filter(models.Supplier.id == supplier_id).first()
+    supplier = (
+        db.query(models.Supplier).filter(models.Supplier.id == supplier_id).first()
+    )
     if not supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
     return supplier
@@ -75,7 +77,9 @@ def update_supplier(
     current_user: models.User = Depends(require_role(["admin", "manager"])),
 ):
     """Update supplier (Admin/Manager only)."""
-    db_supplier = db.query(models.Supplier).filter(models.Supplier.id == supplier_id).first()
+    db_supplier = (
+        db.query(models.Supplier).filter(models.Supplier.id == supplier_id).first()
+    )
     if not db_supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
 

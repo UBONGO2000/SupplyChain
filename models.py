@@ -24,10 +24,19 @@ Relationships:
 """
 
 from sqlalchemy import (
-    Column, Integer, String, DECIMAL, Enum, TIMESTAMP, 
-    ForeignKey, Text, Boolean, Index, func
+    Column,
+    Integer,
+    String,
+    DECIMAL,
+    Enum,
+    TIMESTAMP,
+    ForeignKey,
+    Text,
+    Boolean,
+    Index,
+    func,
 )
-from sqlalchemy.orm import relationship, backref
+from sqlalchemy.orm import relationship
 from database import Base
 from enum import Enum as PyEnum
 
@@ -69,7 +78,7 @@ class OrderStatus(PyEnum):
 # ============================================
 class User(Base):
     __tablename__ = "users"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(255), unique=True, nullable=False, index=True)
     username = Column(String(100), unique=True, nullable=False, index=True)
@@ -80,10 +89,10 @@ class User(Base):
     is_verified = Column(Boolean, default=False)
     created_at = Column(TIMESTAMP, server_default=func.now())
     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
-    
+
     # Relationships
     orders = relationship("Order", back_populates="user")
-    
+
     def __repr__(self):
         return f"<User(id={self.id}, username='{self.username}', role='{self.role.value}')>"
 
@@ -93,7 +102,7 @@ class User(Base):
 # ============================================
 class Warehouse(Base):
     __tablename__ = "warehouses"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), nullable=False)
     location = Column(String(255))
@@ -103,23 +112,27 @@ class Warehouse(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(TIMESTAMP, server_default=func.now())
     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
-    
+
     # Relationships
-    inventory = relationship("Inventory", back_populates="warehouse", cascade="all, delete-orphan")
-    outbound_shipments = relationship(
-        "Shipment", 
-        foreign_keys="Shipment.origin_warehouse_id",
-        back_populates="origin_warehouse"
+    inventory = relationship(
+        "Inventory", back_populates="warehouse", cascade="all, delete-orphan"
     )
-    
+    outbound_shipments = relationship(
+        "Shipment",
+        foreign_keys="Shipment.origin_warehouse_id",
+        back_populates="origin_warehouse",
+    )
+
     # Table args for indexes
     __table_args__ = (
-        Index('idx_warehouse_location', 'location'),
-        Index('idx_warehouse_active', 'is_active'),
+        Index("idx_warehouse_location", "location"),
+        Index("idx_warehouse_active", "is_active"),
     )
-    
+
     def __repr__(self):
-        return f"<Warehouse(id={self.id}, name='{self.name}', location='{self.location}')>"
+        return (
+            f"<Warehouse(id={self.id}, name='{self.name}', location='{self.location}')>"
+        )
 
 
 # ============================================
@@ -127,7 +140,7 @@ class Warehouse(Base):
 # ============================================
 class Supplier(Base):
     __tablename__ = "suppliers"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     company_name = Column(String(150), nullable=False, index=True)
     contact_name = Column(String(200))
@@ -141,17 +154,17 @@ class Supplier(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(TIMESTAMP, server_default=func.now())
     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
-    
+
     # Relationships
     shipments = relationship("Shipment", back_populates="supplier")
     products = relationship("Product", back_populates="supplier")
-    
+
     # Table args for indexes
     __table_args__ = (
-        Index('idx_supplier_country', 'country'),
-        Index('idx_supplier_rating', 'rating'),
+        Index("idx_supplier_country", "country"),
+        Index("idx_supplier_rating", "rating"),
     )
-    
+
     def __repr__(self):
         return f"<Supplier(id={self.id}, company='{self.company_name}', country='{self.country}')>"
 
@@ -161,7 +174,7 @@ class Supplier(Base):
 # ============================================
 class Product(Base):
     __tablename__ = "products"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     sku = Column(String(50), unique=True, nullable=False, index=True)
     name = Column(String(255), nullable=False, index=True)
@@ -176,21 +189,26 @@ class Product(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(TIMESTAMP, server_default=func.now())
     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
-    
+
     # Relationships
-    inventory = relationship("Inventory", back_populates="product", cascade="all, delete-orphan")
+    inventory = relationship(
+        "Inventory", back_populates="product", cascade="all, delete-orphan"
+    )
     order_items = relationship("OrderItem", back_populates="product")
     supplier = relationship("Supplier", back_populates="products")
-    
+
     # Table args for indexes
     __table_args__ = (
-        Index('idx_product_category', 'category'),
-        Index('idx_product_supplier', 'supplier_id'),
-        Index('idx_product_name', 'name'),
+        Index("idx_product_category", "category"),
+        Index("idx_product_supplier", "supplier_id"),
+        Index("idx_product_name", "name"),
     )
-    
+
     def __repr__(self):
-        return f"<Product(id={self.id}, sku='{self.sku}', name='{self.name}', category='{self.category.value}')>"
+        return (
+            f"<Product(id={self.id}, sku='{self.sku}', name='{self.name}', "
+            f"category='{self.category.value}')>"
+        )
 
 
 # ============================================
@@ -198,7 +216,7 @@ class Product(Base):
 # ============================================
 class Inventory(Base):
     __tablename__ = "inventory"
-    
+
     warehouse_id = Column(Integer, ForeignKey("warehouses.id"), primary_key=True)
     product_id = Column(Integer, ForeignKey("products.id"), primary_key=True)
     quantity = Column(Integer, default=0, nullable=False)
@@ -208,19 +226,22 @@ class Inventory(Base):
     max_stock_level = Column(Integer)
     last_updated = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
     location_in_warehouse = Column(String(50))  # Aisle-Shelf-Bin
-    
+
     # Relationships
     warehouse = relationship("Warehouse", back_populates="inventory")
     product = relationship("Product", back_populates="inventory")
-    
+
     # Table args for indexes
     __table_args__ = (
-        Index('idx_inventory_product', 'product_id'),
-        Index('idx_inventory_warehouse', 'warehouse_id'),
+        Index("idx_inventory_product", "product_id"),
+        Index("idx_inventory_warehouse", "warehouse_id"),
     )
-    
+
     def __repr__(self):
-        return f"<Inventory(warehouse_id={self.warehouse_id}, product_id={self.product_id}, qty={self.quantity})>"
+        return (
+            f"<Inventory(warehouse_id={self.warehouse_id}, "
+            f"product_id={self.product_id}, qty={self.quantity})>"
+        )
 
 
 # ============================================
@@ -228,13 +249,15 @@ class Inventory(Base):
 # ============================================
 class Shipment(Base):
     __tablename__ = "shipments"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     tracking_number = Column(String(100), unique=True, index=True)
     origin_warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=False)
     supplier_id = Column(Integer, ForeignKey("suppliers.id"))
     destination_address = Column(Text)
-    status = Column(Enum(ShipmentStatus), default=ShipmentStatus.PENDING, nullable=False, index=True)
+    status = Column(
+        Enum(ShipmentStatus), default=ShipmentStatus.PENDING, nullable=False, index=True
+    )
     departure_date = Column(TIMESTAMP)
     arrival_date = Column(TIMESTAMP)
     actual_arrival_date = Column(TIMESTAMP)
@@ -244,24 +267,27 @@ class Shipment(Base):
     notes = Column(Text)
     created_at = Column(TIMESTAMP, server_default=func.now())
     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
-    
+
     # Relationships
     origin_warehouse = relationship(
-        "Warehouse", 
+        "Warehouse",
         foreign_keys=[origin_warehouse_id],
-        back_populates="outbound_shipments"
+        back_populates="outbound_shipments",
     )
     supplier = relationship("Supplier", back_populates="shipments")
-    
+
     # Table args for indexes
     __table_args__ = (
-        Index('idx_shipment_status', 'status'),
-        Index('idx_shipment_supplier', 'supplier_id'),
-        Index('idx_shipment_dates', 'departure_date', 'arrival_date'),
+        Index("idx_shipment_status", "status"),
+        Index("idx_shipment_supplier", "supplier_id"),
+        Index("idx_shipment_dates", "departure_date", "arrival_date"),
     )
-    
+
     def __repr__(self):
-        return f"<Shipment(id={self.id}, tracking='{self.tracking_number}', status='{self.status.value}')>"
+        return (
+            f"<Shipment(id={self.id}, tracking='{self.tracking_number}', "
+            f"status='{self.status.value}')>"
+        )
 
 
 # ============================================
@@ -269,11 +295,13 @@ class Shipment(Base):
 # ============================================
 class Order(Base):
     __tablename__ = "orders"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     order_number = Column(String(50), unique=True, nullable=False, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    status = Column(Enum(OrderStatus), default=OrderStatus.PENDING, nullable=False, index=True)
+    status = Column(
+        Enum(OrderStatus), default=OrderStatus.PENDING, nullable=False, index=True
+    )
     subtotal = Column(DECIMAL(12, 2), nullable=False)
     tax_amount = Column(DECIMAL(12, 2), default=0.00)
     shipping_cost = Column(DECIMAL(12, 2), default=0.00)
@@ -286,20 +314,25 @@ class Order(Base):
     delivered_at = Column(TIMESTAMP)
     created_at = Column(TIMESTAMP, server_default=func.now())
     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
-    
+
     # Relationships
     user = relationship("User", back_populates="orders")
-    order_items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
-    
+    order_items = relationship(
+        "OrderItem", back_populates="order", cascade="all, delete-orphan"
+    )
+
     # Table args for indexes
     __table_args__ = (
-        Index('idx_order_user', 'user_id'),
-        Index('idx_order_status', 'status'),
-        Index('idx_order_dates', 'ordered_at'),
+        Index("idx_order_user", "user_id"),
+        Index("idx_order_status", "status"),
+        Index("idx_order_dates", "ordered_at"),
     )
-    
+
     def __repr__(self):
-        return f"<Order(id={self.id}, order_number='{self.order_number}', status='{self.status.value}')>"
+        return (
+            f"<Order(id={self.id}, order_number='{self.order_number}', "
+            f"status='{self.status.value}')>"
+        )
 
 
 # ============================================
@@ -307,7 +340,7 @@ class Order(Base):
 # ============================================
 class OrderItem(Base):
     __tablename__ = "order_items"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     order_id = Column(Integer, ForeignKey("orders.id"), nullable=False, index=True)
     product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
@@ -316,16 +349,19 @@ class OrderItem(Base):
     discount_percent = Column(DECIMAL(5, 2), default=0.00)
     line_total = Column(DECIMAL(12, 2), nullable=False)
     created_at = Column(TIMESTAMP, server_default=func.now())
-    
+
     # Relationships
     order = relationship("Order", back_populates="order_items")
     product = relationship("Product", back_populates="order_items")
-    
+
     # Table args for indexes
     __table_args__ = (
-        Index('idx_orderitem_order', 'order_id'),
-        Index('idx_orderitem_product', 'product_id'),
+        Index("idx_orderitem_order", "order_id"),
+        Index("idx_orderitem_product", "product_id"),
     )
-    
+
     def __repr__(self):
-        return f"<OrderItem(id={self.id}, order_id={self.order_id}, product_id={self.product_id}, qty={self.quantity})>"
+        return (
+            f"<OrderItem(id={self.id}, order_id={self.order_id}, "
+            f"product_id={self.product_id}, qty={self.quantity})>"
+        )

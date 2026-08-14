@@ -4,6 +4,7 @@ Priority 1 -- Auth & security.
 Covers registration, login, JWT validation, and role-based access control
 (require_role). This is the foundation everything else depends on.
 """
+
 from datetime import timedelta
 
 import pytest
@@ -31,7 +32,9 @@ def _register_payload(**overrides):
 # Register
 # ============================================
 class TestRegister:
-    def test_register_success_assigns_role_and_hashes_password(self, client, db_session):
+    def test_register_success_assigns_role_and_hashes_password(
+        self, client, db_session
+    ):
         resp = client.post("/api/auth/register", json=_register_payload(role="manager"))
 
         assert resp.status_code == 201
@@ -40,7 +43,11 @@ class TestRegister:
         assert "password" not in body
         assert "hashed_password" not in body
 
-        db_user = db_session.query(models.User).filter(models.User.username == "newuser").first()
+        db_user = (
+            db_session.query(models.User)
+            .filter(models.User.username == "newuser")
+            .first()
+        )
         assert db_user is not None
         assert db_user.role.value == "manager"
         # The core security property: the stored hash is never the raw password.
@@ -48,7 +55,9 @@ class TestRegister:
         assert verify_password(VALID_PASSWORD, db_user.hashed_password) is True
 
     def test_register_duplicate_email_rejected(self, client):
-        first = client.post("/api/auth/register", json=_register_payload(username="first"))
+        first = client.post(
+            "/api/auth/register", json=_register_payload(username="first")
+        )
         assert first.status_code == 201
 
         resp = client.post(
@@ -60,7 +69,9 @@ class TestRegister:
         assert "email" in resp.json()["detail"].lower()
 
     def test_register_duplicate_username_rejected(self, client):
-        first = client.post("/api/auth/register", json=_register_payload(email="first@example.com"))
+        first = client.post(
+            "/api/auth/register", json=_register_payload(email="first@example.com")
+        )
         assert first.status_code == 201
 
         resp = client.post(
@@ -79,7 +90,9 @@ class TestLogin:
     def test_login_wrong_password_rejected(self, client, db_session):
         make_user(db_session, "bob", password=VALID_PASSWORD)
 
-        resp = client.post("/api/auth/login", json={"username": "bob", "password": "WrongPass1"})
+        resp = client.post(
+            "/api/auth/login", json={"username": "bob", "password": "WrongPass1"}
+        )
 
         assert resp.status_code == 401
 
@@ -142,7 +155,9 @@ class TestJWT:
         )
         tampered = token[:-4] + ("A" if token[-4] != "A" else "B") + token[-3:]
 
-        resp = client.get("/api/auth/me", headers={"Authorization": f"Bearer {tampered}"})
+        resp = client.get(
+            "/api/auth/me", headers={"Authorization": f"Bearer {tampered}"}
+        )
 
         assert resp.status_code == 401
 
@@ -172,13 +187,19 @@ class TestRBAC:
 
         assert resp.status_code == 403
 
-    def test_allowed_role_passes_rbac_check(self, client, staff_user, warehouse, product):
+    def test_allowed_role_passes_rbac_check(
+        self, client, staff_user, warehouse, product
+    ):
         # staff is an allowed role for inventory creation; the request should
         # get past require_role (any later 4xx would be from business logic,
         # not RBAC).
         resp = client.post(
             "/api/inventory",
-            json={"warehouse_id": warehouse.id, "product_id": product.id, "quantity": 10},
+            json={
+                "warehouse_id": warehouse.id,
+                "product_id": product.id,
+                "quantity": 10,
+            },
             headers=auth_headers(staff_user),
         )
 

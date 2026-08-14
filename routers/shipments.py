@@ -9,10 +9,12 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc
 
 import models
-import schema
 from schema import (
-    ShipmentCreate, ShipmentResponse, ShipmentUpdate,
-    PaginatedResponse, ShipmentStatusEnum,
+    ShipmentCreate,
+    ShipmentResponse,
+    ShipmentUpdate,
+    PaginatedResponse,
+    ShipmentStatusEnum,
 )
 from auth import get_current_user, require_role
 from database import get_db
@@ -55,7 +57,12 @@ def get_shipments(
         query = query.filter(models.Shipment.origin_warehouse_id == warehouse_id)
 
     total = query.count()
-    items = query.order_by(desc(models.Shipment.created_at)).offset((page - 1) * page_size).limit(page_size).all()
+    items = (
+        query.order_by(desc(models.Shipment.created_at))
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
     return PaginatedResponse.create(items, total, page, page_size)
 
 
@@ -66,7 +73,9 @@ def get_shipment(
     current_user: models.User = Depends(get_current_user),
 ):
     """Get shipment by ID."""
-    shipment = db.query(models.Shipment).filter(models.Shipment.id == shipment_id).first()
+    shipment = (
+        db.query(models.Shipment).filter(models.Shipment.id == shipment_id).first()
+    )
     if not shipment:
         raise HTTPException(status_code=404, detail="Shipment not found")
     return shipment
@@ -80,7 +89,9 @@ def update_shipment(
     current_user: models.User = Depends(require_role(["admin", "manager", "staff"])),
 ):
     """Update shipment status."""
-    db_shipment = db.query(models.Shipment).filter(models.Shipment.id == shipment_id).first()
+    db_shipment = (
+        db.query(models.Shipment).filter(models.Shipment.id == shipment_id).first()
+    )
     if not db_shipment:
         raise HTTPException(status_code=404, detail="Shipment not found")
 

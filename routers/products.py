@@ -10,10 +10,12 @@ from sqlalchemy import func, or_
 from decimal import Decimal
 
 import models
-import schema
 from schema import (
-    ProductCreate, ProductResponse, ProductUpdate,
-    ProductWithInventoryResponse, PaginatedResponse,
+    ProductCreate,
+    ProductResponse,
+    ProductUpdate,
+    ProductWithInventoryResponse,
+    PaginatedResponse,
     ProductCategoryEnum,
 )
 from auth import get_current_user, require_role
@@ -29,9 +31,13 @@ def create_product(
     current_user: models.User = Depends(require_role(["admin", "manager"])),
 ):
     """Create a new product (Admin/Manager only)."""
-    existing = db.query(models.Product).filter(models.Product.sku == product.sku).first()
+    existing = (
+        db.query(models.Product).filter(models.Product.sku == product.sku).first()
+    )
     if existing:
-        raise HTTPException(status_code=400, detail="Product with this SKU already exists")
+        raise HTTPException(
+            status_code=400, detail="Product with this SKU already exists"
+        )
 
     db_product = models.Product(**product.model_dump())
     db.add(db_product)
@@ -88,11 +94,15 @@ def get_product(
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    inventory_summary = db.query(
-        func.count(models.Inventory.product_id).label("warehouses_count"),
-        func.sum(models.Inventory.quantity).label("total_quantity"),
-        func.sum(models.Inventory.available_quantity).label("available_quantity"),
-    ).filter(models.Inventory.product_id == product_id).first()
+    inventory_summary = (
+        db.query(
+            func.count(models.Inventory.product_id).label("warehouses_count"),
+            func.sum(models.Inventory.quantity).label("total_quantity"),
+            func.sum(models.Inventory.available_quantity).label("available_quantity"),
+        )
+        .filter(models.Inventory.product_id == product_id)
+        .first()
+    )
 
     response = ProductWithInventoryResponse(
         **product.__dict__,
@@ -111,7 +121,9 @@ def update_product(
     current_user: models.User = Depends(require_role(["admin", "manager"])),
 ):
     """Update product (Admin/Manager only)."""
-    db_product = db.query(models.Product).filter(models.Product.id == product_id).first()
+    db_product = (
+        db.query(models.Product).filter(models.Product.id == product_id).first()
+    )
     if not db_product:
         raise HTTPException(status_code=404, detail="Product not found")
 
