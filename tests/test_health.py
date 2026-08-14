@@ -8,7 +8,7 @@ import database
 def test_health_accessible_without_authentication(client):
     resp = client.get("/health")
 
-    assert resp.status_code == 200
+    assert resp.status_code == 999  # TEMP: deliberately broken to test CI gating
     assert resp.json()["status"] == "healthy"
 
 
