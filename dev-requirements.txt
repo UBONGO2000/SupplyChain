@@ -16,3 +16,7 @@ black==24.1.1
 isort==5.13.2
 flake8==7.0.0
 mypy==1.8.0
+
+# Security (used by .github/workflows/security.yml)
+bandit==1.9.4
+pip-audit==2.10.1

@@ -1,0 +1,21 @@
+name: CD
+
+# Fires when the CI workflow finishes on main, and deploys only if it
+# succeeded -- this is what actually gates the deploy on CI passing.
+# NOTE: Render's own "Auto-Deploy" must be turned OFF in the service
+# settings, otherwise Render deploys on every push regardless of this
+# workflow (see README.md, section "CI/CD").
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  deploy:
+    name: Deploy to Render
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+    steps:
+      - name: Trigger Render deploy hook
+        run: curl -fsS -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"

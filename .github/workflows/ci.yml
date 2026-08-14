@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: "3.11"
+  # config.py requires DATABASE_URL at import time; database.py's engine is
+  # lazy (create_engine doesn't connect), and tests/conftest.py redirects the
+  # get_db dependency to an in-memory SQLite engine, so this URL is never
+  # actually dialed -- it only satisfies startup validation.
+  DATABASE_URL: "mysql+pymysql://user:pass@127.0.0.1:3306/testdb"
+  SECRET_KEY: "ci-only-secret-key-not-for-production-use-32chars"
+
+jobs:
+  lint:
+    name: Lint (black, flake8)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r dev-requirements.txt
+
+      - name: Black (check only)
+        run: black --check .
+
+      - name: Flake8
+        run: flake8 .
+
+  test:
+    name: Tests + coverage
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r dev-requirements.txt
+
+      - name: Run tests with coverage
+        run: pytest --cov=. --cov-report=xml --cov-report=term-missing
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          fail_ci_if_error: false

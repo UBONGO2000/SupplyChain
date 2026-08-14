@@ -26,6 +26,11 @@ API REST pour la gestion de la chaîne d'approvisionnement. Construite avec **Fa
 
 ```
 SupplyChain/
+├── .github/
+│   └── workflows/
+│       ├── ci.yml           # Lint (black, flake8) + tests (pytest) + coverage (codecov)
+│       ├── security.yml     # Scan bandit + audit des dépendances pip-audit
+│       └── cd.yml           # Déploiement Render, gaté par le succès de CI
 ├── main.py                 # Point d'entrée de l'application
 ├── config.py               # Configuration centralisée (variables d'environnement)
 ├── database.py             # Connexion SQLAlchemy + pooling
@@ -55,6 +60,7 @@ SupplyChain/
 │   ├── test_inventory.py   # Ajustements de stock, intégrité des données
 │   └── test_health.py      # Endpoint /health
 ├── pytest.ini              # Config pytest (pythonpath, testpaths)
+├── setup.cfg               # Config flake8 (compatible black)
 ├── requirements.txt        # Dépendances de production
 ├── dev-requirements.txt    # Dépendances de développement
 ├── runtime.txt             # Version Python
@@ -176,6 +182,39 @@ Les routers `products.py`, `warehouses.py`, `suppliers.py`, `shipments.py` et `a
 1. **Commande sans stock disponible acceptée silencieusement** (`routers/orders.py`) — une commande sur un produit sans aucun enregistrement d'inventaire suffisant était créée sans réservation, sans erreur. Corrigé : renvoie désormais **409 Conflict**, la commande n'est pas créée.
 2. **Collision de numéro de commande** (`routers/orders.py`) — `order_number` était généré à partir d'un timestamp en secondes ; deux commandes créées dans la même seconde produisaient le même numéro et la seconde échouait avec une erreur 500 (contrainte UNIQUE). Corrigé en ajoutant un suffixe UUID.
 3. **Rôle utilisateur stocké de façon incorrecte** (`routers/auth.py`, `main.py`) — le rôle était assigné comme chaîne brute en minuscules (`"staff"`) à une colonne `Enum(UserRole)` qui attend le nom de l'enum (`"STAFF"`). Sur MySQL ce défaut passait inaperçu grâce à la normalisation insensible à la casse des colonnes ENUM natives, mais restait un point fragile pouvant faire échouer la lecture d'un utilisateur (donc le login) sur un autre moteur ou après un changement de collation. Corrigé en assignant un véritable membre d'enum (`models.UserRole(...)`).
+
+---
+
+## CI/CD
+
+Trois workflows GitHub Actions dans `.github/workflows/` :
+
+| Workflow | Déclencheur | Ce qu'il fait |
+|----------|-------------|----------------|
+| **CI** (`ci.yml`) | Push sur `main`, Pull Request | `black --check` + `flake8` (lint), `pytest` (42 tests), couverture envoyée à Codecov |
+| **Sécurité** (`security.yml`) | Push sur `main`, chaque lundi 06:00 UTC, déclenchement manuel | Scan statique `bandit`, audit des dépendances `pip-audit` |
+| **CD** (`cd.yml`) | Fin du workflow CI sur `main`, uniquement s'il a réussi | Déclenche le déploiement sur Render via un *deploy hook* |
+
+### Comment CD est réellement gaté par CI
+
+Render a son propre système d'auto-déploiement sur push GitHub, indépendant de toute Action — il ne sait pas ce qu'est notre workflow CI et déploierait donc même si les tests échouent. Pour que le déploiement dépende réellement du succès de CI :
+
+1. Dans **Render Dashboard → ton service → Settings**, désactive **Auto-Deploy** (sinon Render déploie sur chaque push, en plus du workflow CD).
+2. Dans **Render Dashboard → ton service → Settings → Deploy Hook**, copie l'URL du hook.
+3. Dans **GitHub → Settings → Secrets and variables → Actions**, ajoute un secret `RENDER_DEPLOY_HOOK_URL` avec cette URL.
+4. `cd.yml` s'abonne aux fins d'exécution du workflow `CI` (`workflow_run`) et n'appelle le hook que si `conclusion == 'success'`.
+
+### Secrets GitHub Actions à configurer
+
+| Secret | Utilisé par | Où le trouver |
+|--------|-------------|---------------|
+| `RENDER_DEPLOY_HOOK_URL` | `cd.yml` | Render Dashboard → service → Settings → Deploy Hook |
+| `CODECOV_TOKEN` | `ci.yml` | [codecov.io](https://codecov.io) → ajouter le repo → Settings → token (optionnel pour un repo public, mais évite les erreurs de rate-limit) |
+
+### État du scan de sécurité (référence)
+
+- `bandit` : 0 issue (les faux positifs pré-existants — mots de passe de démo, bind `0.0.0.0`, littéral `"bearer"` — sont documentés avec `# nosec` inline, code par code, plutôt que masqués globalement).
+- `pip-audit` : **34 vulnérabilités connues** relevées sur des dépendances figées (`fastapi`, `starlette`, `python-jose`, `python-multipart`, `gunicorn`, `pytest`, `python-dotenv`, `pymysql`, `black`, `ecdsa`). Le workflow Sécurité les fera apparaître en rouge dès sa première exécution — c'est attendu, ce n'est pas une régression introduite ici. Il ne bloque pas le déploiement (seul `CI` gate `CD`) : c'est un signal à trier, pas un verrou. Mettre à jour `fastapi`/`starlette` demande une passe de tests dédiée (leur version est actuellement figée en partie pour la compatibilité avec `TestClient`, voir la note dans `dev-requirements.txt`) — recommandé comme chantier séparé.
 
 ---
 
@@ -447,6 +486,9 @@ curl -X POST "https://supplychain-39y0.onrender.com/api/orders" \
 | Validation | Pydantic 2.6 |
 | Migrations | Alembic |
 | Tests | Pytest + FastAPI TestClient (SQLite en mémoire) |
+| CI/CD | GitHub Actions (lint, tests, sécurité, déploiement) |
+| Sécurité statique | Bandit + pip-audit |
+| Couverture | pytest-cov + Codecov |
 | Serveur prod | Gunicorn + Uvicorn workers |
 | Pool connexions | QueuePool (10+20 overflow) |
 | Backend deploy | Render |
