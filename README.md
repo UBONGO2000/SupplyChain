@@ -2,6 +2,12 @@
 
 API REST pour la gestion de la chaîne d'approvisionnement. Construite avec **FastAPI**, **SQLAlchemy** et **MySQL**.
 
+[![CI](https://github.com/UBONGO2000/SupplyChain/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/UBONGO2000/SupplyChain/actions/workflows/ci.yml)
+[![Security](https://github.com/UBONGO2000/SupplyChain/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/UBONGO2000/SupplyChain/actions/workflows/security.yml)
+[![codecov](https://codecov.io/gh/UBONGO2000/SupplyChain/branch/main/graph/badge.svg)](https://codecov.io/gh/UBONGO2000/SupplyChain)
+![Tests](https://img.shields.io/badge/tests-42%20passed-brightgreen?style=flat-square)
+![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)
+
 ![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.141+-005571?style=flat-square)
 ![MySQL](https://img.shields.io/badge/MySQL-8.0+-4479A1?style=flat-square)
