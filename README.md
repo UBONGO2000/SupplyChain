@@ -3,7 +3,7 @@
 API REST pour la gestion de la chaîne d'approvisionnement. Construite avec **FastAPI**, **SQLAlchemy** et **MySQL**.
 
 ![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-005571?style=flat-square)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.141+-005571?style=flat-square)
 ![MySQL](https://img.shields.io/badge/MySQL-8.0+-4479A1?style=flat-square)
 ![Deploy](https://img.shields.io/badge/Deploy-Render-46E3B7?style=flat-square)
 
@@ -213,8 +213,9 @@ Render a son propre système d'auto-déploiement sur push GitHub, indépendant d
 
 ### État du scan de sécurité (référence)
 
-- `bandit` : 0 issue (les faux positifs pré-existants — mots de passe de démo, bind `0.0.0.0`, littéral `"bearer"` — sont documentés avec `# nosec` inline, code par code, plutôt que masqués globalement).
-- `pip-audit` : **34 vulnérabilités connues** relevées sur des dépendances figées (`fastapi`, `starlette`, `python-jose`, `python-multipart`, `gunicorn`, `pytest`, `python-dotenv`, `pymysql`, `black`, `ecdsa`). Le workflow Sécurité les fera apparaître en rouge dès sa première exécution — c'est attendu, ce n'est pas une régression introduite ici. Il ne bloque pas le déploiement (seul `CI` gate `CD`) : c'est un signal à trier, pas un verrou. Mettre à jour `fastapi`/`starlette` demande une passe de tests dédiée (leur version est actuellement figée en partie pour la compatibilité avec `TestClient`, voir la note dans `dev-requirements.txt`) — recommandé comme chantier séparé.
+- `bandit` : **0 issue** (les faux positifs pré-existants — mots de passe de démo, bind `0.0.0.0`, littéral `"bearer"` — sont documentés avec `# nosec` inline, code par code, plutôt que masqués globalement).
+- `pip-audit` : en calibrant ce workflow, un premier scan avait remonté 34 vulnérabilités connues sur des dépendances figées (`fastapi`, `starlette`, `python-jose`, `python-multipart`, `gunicorn`, `pytest`, `python-dotenv`, `pymysql`, `black`). Toutes ont été corrigées en mettant à jour ces paquets (`fastapi` 0.109→0.141, `starlette` 0.35→1.6, `pytest` 7→9, etc.), en revalidant à chaque étape que les 42 tests, `black`, `flake8` et `bandit` restaient au vert. **Il ne reste plus qu'1 vulnérabilité connue** :
+  - `ecdsa==0.19.2` (`PYSEC-2026-1325`, sans version corrigée disponible — attaque par canal temporel dans l'implémentation Python pure, que les mainteneurs ont explicitement choisi de ne pas corriger). C'est une dépendance transitive de `python-jose[cryptography]`, utilisée uniquement pour les algorithmes JWT à base d'ECDSA (`ES256`...). Ce projet signe ses tokens en **`HS256`** (voir `ALGORITHM` dans `config.py`), donc le code vulnérable n'est jamais exécuté ici.
 
 ---
 
@@ -478,12 +479,12 @@ curl -X POST "https://supplychain-39y0.onrender.com/api/orders" \
 
 | Couche | Technologie |
 |--------|-------------|
-| Framework | FastAPI 0.109 |
+| Framework | FastAPI 0.141 |
 | ORM | SQLAlchemy 2.0 |
 | Base de données | MySQL 8.0+ / TiDB Cloud |
 | Authentification | JWT (python-jose) |
 | Hachage mot de passe | bcrypt |
-| Validation | Pydantic 2.6 |
+| Validation | Pydantic 2.13 |
 | Migrations | Alembic |
 | Tests | Pytest + FastAPI TestClient (SQLite en mémoire) |
 | CI/CD | GitHub Actions (lint, tests, sécurité, déploiement) |

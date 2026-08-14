@@ -15,7 +15,6 @@ from typing import Generator
 
 from config import DATABASE_URL
 
-
 # ============================================
 # Engine Configuration with Connection Pooling
 # ============================================
