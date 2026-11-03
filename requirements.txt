@@ -13,7 +13,7 @@ alembic==1.13.1
 # Authentication & Security
 python-jose[cryptography]==3.5.0
 bcrypt==5.0.0
-python-multipart==0.0.32
+python-multipart==0.0.33
 
 # Validation
 pydantic==2.13.4
