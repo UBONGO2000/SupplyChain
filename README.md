@@ -6,14 +6,40 @@ API REST pour la gestion de la chaîne d'approvisionnement. Construite avec **Fa
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-005571?style=flat-square)
 ![MySQL](https://img.shields.io/badge/MySQL-8.0+-4479A1?style=flat-square)
 ![Deploy](https://img.shields.io/badge/Deploy-Render-46E3B7?style=flat-square)
+![Démo](https://img.shields.io/website?url=https%3A%2F%2Fsupplychain-39y0.onrender.com%2Fhealth&label=d%C3%A9mo&style=flat-square)
+![Docker](https://img.shields.io/badge/Docker-compose-2496ED?style=flat-square&logo=docker&logoColor=white)
+
+---
+
+## Démo en ligne
+
+| Ressource | URL |
+|-----------|-----|
+| API | https://supplychain-39y0.onrender.com |
+| Swagger UI | https://supplychain-39y0.onrender.com/docs |
+| Santé | https://supplychain-39y0.onrender.com/health |
+
+> ⏳ **Plan gratuit Render** : le service s'endort après ~15 minutes d'inactivité.
+> La première requête peut donc prendre **~50 secondes** (réveil) ; les suivantes sont immédiates.
+> Le workflow `.github/workflows/keepalive.yml` ping `/health` toutes les 10 minutes pour réduire ce délai.
+
+**Compte de démonstration** : aucun mot de passe n'est publié pour l'instance en ligne. Créez-en un sur votre instance :
+
+```bash
+python -m cli create-demo-user
+# → Demo account ready: demo <demo@example.com> (staff)
+# → Password: <mot de passe aléatoire affiché une seule fois>
+```
+
+Relancer la commande régénère le mot de passe (pratique pour une démo publique). Avec Docker, le compte est créé automatiquement (voir plus bas).
 
 ---
 
 ## Fonctionnalités
 
-- CRUD complet pour entrepôts, fournisseurs, produits, stocks, expéditions et commandes
+- CRUD pour entrepôts, fournisseurs, produits, stocks, expéditions et commandes
 - Authentification JWT avec rôles (Admin, Manager, Staff, Viewer)
-- Requêtes SQL complexes : agrégations, JOINs, sous-requêtes
+- Requêtes SQL complexes : agrégations et JOINs
 - Gestion des stocks avec réservation automatique lors des commandes
 - Analytiques : résumé des ventes, alertes stock faible, top produits, performance fournisseurs
 - Pagination standardisée sur tous les endpoints
@@ -27,6 +53,7 @@ API REST pour la gestion de la chaîne d'approvisionnement. Construite avec **Fa
 ```
 SupplyChain/
 ├── main.py                 # Point d'entrée de l'application
+├── cli.py                  # Commandes d'exploitation (seed, compte de démo)
 ├── config.py               # Configuration centralisée (variables d'environnement)
 ├── database.py             # Connexion SQLAlchemy + pooling
 ├── models.py               # Modèles ORM (8 tables)
@@ -48,6 +75,15 @@ SupplyChain/
 │   ├── shipments.py        # CRUD expéditions
 │   ├── orders.py           # CRUD commandes + réservation stock
 │   └── analytics.py        # Rapports et statistiques
+├── tests/                  # Suite pytest (SQLite temporaire, zéro effet de bord)
+├── scripts/                # Scripts d'exploitation (rotation des comptes par défaut)
+├── docs/
+│   └── api.http            # Collection d'appels (VS Code REST Client)
+├── .github/workflows/      # Keepalive Render (CI à venir en phase 2)
+├── Dockerfile              # Image de production
+├── docker-compose.yml      # API + MySQL 8 en une commande
+├── docker-entrypoint.sh    # Migrations + seed au démarrage du conteneur
+├── pytest.ini              # Configuration pytest
 ├── requirements.txt        # Dépendances de production
 ├── dev-requirements.txt    # Dépendances de développement
 ├── runtime.txt             # Version Python
@@ -115,9 +151,52 @@ pip install -r requirements.txt && alembic upgrade head
 
 ## Données de démonstration
 
-`seed_data.py` peuple la base avec un jeu de données réaliste (3 entrepôts, 4 fournisseurs, 10 produits, 10 lignes de stock — dont volontairement 2 en stock faible pour tester les alertes —, 3 expéditions et 2 commandes). Cette fonction est appelée automatiquement au démarrage de l'application (voir `lifespan` dans `main.py`) et est **idempotente** : elle ne fait rien si des entrepôts existent déjà en base, donc aucun risque de doublon à chaque redéploiement.
+`seed_data.py` peuple la base avec un jeu de données réaliste (3 entrepôts, 4 fournisseurs, 10 produits, 10 lignes de stock — dont volontairement 2 en stock faible pour tester les alertes —, 3 expéditions et 2 commandes). L'insertion est **idempotente** : elle ne fait rien si des entrepôts existent déjà, donc aucun risque de doublon à chaque redéploiement.
+
+Le seed n'est **jamais exécuté sans opt-in** : une base de production ne reçoit pas de données de démonstration par défaut, et un échec du seed ne peut pas empêcher l'API de démarrer.
+
+```bash
+# À la demande, sur une base vide (recommandé)
+python -m cli seed-demo
+
+# Équivalent historique
+python seed_data.py
+
+# Ou au démarrage (démo uniquement) : un échec est journalisé, jamais fatal
+SEED_DEMO_DATA=true
+```
+
+Les commandes de démonstration sont rattachées au premier utilisateur existant (l'administrateur bootstrap ou le compte de démo s'il est présent). Le seed ne crée **aucun compte**.
 
 But : permettre de tester immédiatement tous les endpoints (Postman, Swagger, ou un futur frontend) sans avoir à créer des données à la main.
+
+---
+
+## Démarrage rapide (Docker)
+
+Une seule commande, sans installer MySQL ni Python :
+
+```bash
+docker compose up --build
+```
+
+| Ressource | URL / valeur |
+|-----------|--------------|
+| Swagger UI | http://localhost:8000/docs |
+| Page d'accueil | http://localhost:8000/ |
+| Santé | http://localhost:8000/health |
+| Compte de démo | `demo` / `DemoPass123!` |
+
+Au démarrage, le conteneur applique les migrations Alembic, crée le compte de démo et charge les données d'exemple. Les données MySQL sont conservées dans le volume `mysql_data`.
+
+> ⚠️ Le mot de passe `DemoPass123!` et le `SECRET_KEY` présents dans `docker-compose.yml` sont **réservés au développement local**. Ne les réutilisez jamais sur un environnement exposé.
+
+Pour repartir d'une base vierge :
+
+```bash
+docker compose down -v
+docker compose up --build
+```
 
 ---
 
@@ -159,12 +238,23 @@ Modifier `.env` :
 
 ```env
 DATABASE_URL=mysql+pymysql://user:password@host:port/database_name
-SECRET_KEY=une-clé-secrète-unique-et-longue
+SECRET_KEY=une-clé-secrète-unique-et-longue   # 32 caractères minimum, obligatoire
 ACCESS_TOKEN_EXPIRE_MINUTES=30
+APP_ENV=development
+SEED_DEMO_DATA=false
+DB_SSL=true
 API_HOST=0.0.0.0
 API_PORT=8000
 CORS_ORIGINS=http://localhost:3000,http://localhost:5173
+CORS_ORIGIN_REGEX=
+
+# Premier administrateur (optionnel, création unique au démarrage)
+BOOTSTRAP_ADMIN_EMAIL=admin@example.com
+BOOTSTRAP_ADMIN_PASSWORD=un-mot-de-passe-fort-et-unique
+BOOTSTRAP_ADMIN_USERNAME=admin
 ```
+
+> `SECRET_KEY` n'a **aucune valeur par défaut** : l'application refuse de démarrer si elle est absente ou trop courte. C'est volontaire — une clé de repli présente dans le dépôt permettrait de forger des jetons administrateur.
 
 ### Créer la base de données
 
@@ -177,17 +267,23 @@ CREATE DATABASE supply_chain_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
 ```bash
 alembic upgrade head
 ```
-Crée les 8 tables avec le schéma à jour. Les utilisateurs par défaut et les données de démonstration se créent automatiquement au premier démarrage de l'application (voir plus bas).
+Crée les 8 tables avec le schéma à jour. Aucun compte n'est créé automatiquement : voir « Création du premier administrateur » plus bas. Les données de démonstration sont opt-in (`python seed_data.py`).
 
 ### Lancer l'application
 
 ```bash
 # Mode développement (rechargement automatique)
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
-
-# Ou directement
-python main.py
 ```
+
+### Lancer les tests
+
+```bash
+pip install -r requirements.txt -r dev-requirements.txt
+pytest
+```
+
+Les tests tournent sur une base **SQLite temporaire** : aucun MySQL, aucun réseau, aucun effet de bord sur une base existante. Ils couvrent notamment l'authentification, le RBAC, la désactivation de compte, la robustesse de `/health`, la politique CORS, la page d'accueil, la création/rotation du compte de démo et le caractère non fatal du seed.
 
 ---
 
@@ -212,12 +308,20 @@ python main.py
    | Variable | Description |
    |----------|-------------|
    | `DATABASE_URL` | Chaîne de connexion MySQL/TiDB |
-   | `SECRET_KEY` | Clé secrète JWT (32+ caractères) |
+   | `SECRET_KEY` | Clé secrète JWT — **obligatoire**, 32+ caractères |
    | `ACCESS_TOKEN_EXPIRE_MINUTES` | Durée de vie du token (ex: 60) |
+   | `APP_ENV` | `production` |
+   | `SEED_DEMO_DATA` | `false` en production |
+   | `DB_SSL` | `true` pour TiDB Cloud |
+   | `BOOTSTRAP_ADMIN_EMAIL` | Email du premier administrateur (optionnel) |
+   | `BOOTSTRAP_ADMIN_PASSWORD` | Mot de passe fort, unique (optionnel) |
    | `DEBUG` | `false` en production |
    | `CORS_ORIGINS` | Origines autorisées (séparées par virgule) |
+   | `CORS_ORIGIN_REGEX` | Regex optionnelle (previews), vide par défaut |
 
 5. **Déploie** — Render exécute automatiquement le build et lance l'application
+
+6. **Évite la mise en veille** — le workflow `.github/workflows/keepalive.yml` ping `/health` toutes les 10 minutes. Il s'active automatiquement sur le dépôt GitHub (aucun secret requis) ; lance-le une fois manuellement depuis l'onglet *Actions* pour vérifier l'URL. GitHub désactive les workflows planifiés après 60 jours sans activité du dépôt : relance-le manuellement si nécessaire.
 
 ---
 
@@ -228,7 +332,7 @@ Le middleware CORS autorise :
 | Origine | Méthode |
 |---------|---------|
 | Origines spécifiées dans `CORS_ORIGINS` | Variable d'environnement |
-| `https://*.vercel.app` | Regex automatique (tous les déploiements Vercel) |
+| `CORS_ORIGIN_REGEX` | Regex optionnelle, **vide par défaut** (aucun joker `*.vercel.app`) |
 | `http://localhost:3000` | Dev React/Vue par défaut |
 | `http://localhost:5173` | Dev Vite par défaut |
 
@@ -240,16 +344,30 @@ CORS_ORIGINS=https://mon-domaine.com,https://www.mon-domaine.com
 
 ---
 
-## Utilisateurs par défaut
+## Création du premier administrateur
 
-Créés automatiquement au premier démarrage :
+Aucun compte n'est créé automatiquement et aucun mot de passe n'est présent dans le dépôt. Pour amorcer une instance :
 
-| Rôle | Email | Mot de passe |
-|------|-------|-------------|
-| Admin | admin@supplychain.com | Admin123! |
-| Manager | manager@supplychain.com | Manager123! |
-| Staff | staff@supplychain.com | Staff123! |
-| Viewer | viewer@supplychain.com | Viewer123! |
+```env
+BOOTSTRAP_ADMIN_EMAIL=admin@example.com
+BOOTSTRAP_ADMIN_PASSWORD=un-mot-de-passe-fort-et-unique
+BOOTSTRAP_ADMIN_USERNAME=admin   # optionnel
+```
+
+Au démarrage, si les deux premières variables sont définies **et** qu'aucun compte avec cet email n'existe, un administrateur est créé. Un redéploiement ne réinitialise jamais son mot de passe. Retirez ensuite ces variables de l'environnement.
+
+L'inscription publique (`POST /api/auth/register`) crée uniquement des comptes **lecture seule** (`viewer`) : le rôle n'est jamais choisi par le client. La promotion d'un compte est une action d'administration.
+
+### Comptes historiques
+
+Les anciennes versions créaient quatre comptes de démonstration avec des mots de passe publiés. Le code ne les crée plus, mais **une base existante les contient toujours**. Pour les neutraliser :
+
+```bash
+python scripts/disable_default_accounts.py          # simulation, aucune écriture
+python scripts/disable_default_accounts.py --apply  # désactive les comptes encore vulnérables
+```
+
+Le script ne désactive un compte que si son mot de passe actuel correspond encore au mot de passe publié, et le désactive au lieu de le supprimer (les commandes référencent l'utilisateur).
 
 ---
 
@@ -331,6 +449,7 @@ Créés automatiquement au premier démarrage :
 
 | Méthode | Endpoint | Description |
 |---------|----------|-------------|
+| GET | `/` | Page d'accueil JSON (nom, version, liens, aide compte démo) |
 | GET | `/health` | Vérification de santé |
 | GET | `/docs` | Swagger UI |
 | GET | `/redoc` | ReDoc |
@@ -341,12 +460,17 @@ Créés automatiquement au premier démarrage :
 
 **API en ligne** : [https://supplychain-39y0.onrender.com/docs](https://supplychain-39y0.onrender.com/docs)
 
+> Première requête : jusqu'à ~50 s si le service Render était en veille.
+
+Une collection prête à l'emploi se trouve dans [`docs/api.http`](docs/api.http) (VS Code REST Client) : login, produits, création de commande, stock faible, top produits.
+
 ### Connexion
 
 ```bash
+# Le compte de démo se crée avec : python -m cli create-demo-user
 curl -X POST "https://supplychain-39y0.onrender.com/api/auth/login" \
   -H "Content-Type: application/json" \
-  -d '{"username": "admin", "password": "Admin123!"}'
+  -d '{"username": "demo", "password": "<mot_de_passe_affiche_par_la_cli>"}'
 ```
 
 ### Créer une commande
@@ -397,13 +521,18 @@ curl -X POST "https://supplychain-39y0.onrender.com/api/orders" \
 
 ## Sécurité
 
-- **SECRET_KEY** : chargée depuis `.env` (jamais en dur dans le code)
-- **Mots de passe** : hachés avec bcrypt
+- **SECRET_KEY** : obligatoire (32+ caractères), aucune valeur de repli — l'application refuse de démarrer sans elle
+- **Mots de passe** : hachés avec bcrypt directement (limite de 72 octets vérifiée explicitement, jamais de troncature silencieuse)
+- **Comptes** : aucun compte ni mot de passe par défaut ; bootstrap administrateur opt-in par variables d'environnement
+- **Inscription** : rôle impossible à choisir côté client, extra fields rejetés (`422`), compte créé en lecture seule
+- **Désactivation** : un compte désactivé perd l'accès immédiatement, même avec un token encore valide
 - **JWT** : tokens avec expiration configurable
 - **RBAC** : 4 niveaux de rôles
-- **CORS** : whitelist configurable + regex `*.vercel.app` automatique
+- **CORS** : liste blanche explicite ; pas de joker `*.vercel.app`
 - **Injection SQL** : requêtes paramétrées via SQLAlchemy ORM
-- **Validation** : tous les inputs validés par Pydantic
+- **Validation** : schémas Pydantic stricts, `422` sur champ inconnu
+
+**Limites assumées** : pas de limitation de tentatives de connexion, pas de révocation immédiate des jetons (durée courte + vérification `is_active`). Voir `SECURITY.md`.
 
 **Important** : ne jamais commiter le fichier `.env` dans Git.
 

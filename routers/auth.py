@@ -43,7 +43,9 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
         username=user.username,
         hashed_password=hashed_password,
         full_name=user.full_name,
-        role=user.role.value,
+        # Least privilege: public self-registration must never grant write
+        # access (staff/manager/admin). Promotion is an admin-only action.
+        role=models.UserRole.VIEWER,
         is_active=True,
     )
     db.add(db_user)

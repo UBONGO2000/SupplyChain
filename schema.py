@@ -17,7 +17,7 @@ Schemas follow a pattern:
 - List: Paginated response wrapper
 """
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from typing import Optional, List, TypeVar, Generic
 from datetime import datetime
 from decimal import Decimal
@@ -114,17 +114,24 @@ class MessageResponse(BaseModel):
 # USER SCHEMAS
 # ============================================
 class UserBase(BaseModel):
-    """Base fields for user operations"""
+    """Fields shared by every user representation"""
     email: EmailStr
     username: str = Field(..., min_length=3, max_length=100)
     full_name: Optional[str] = Field(None, max_length=200)
-    role: UserRoleEnum = UserRoleEnum.STAFF
 
 
 class UserCreate(UserBase):
-    """Fields required to create a new user"""
-    password: str = Field(..., min_length=8, max_length=100)
-    
+    """Fields required to create a new user.
+
+    `role` is deliberately absent: the public registration endpoint must never
+    let a client pick its own privileges. Extra fields are rejected rather than
+    ignored so that a payload such as {"role": "admin"} fails loudly (422)
+    instead of creating an account with an unexpected shape.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    password: str = Field(..., min_length=8, max_length=72)
+
     @field_validator('password')
     @classmethod
     def validate_password_strength(cls, v: str) -> str:
@@ -135,6 +142,8 @@ class UserCreate(UserBase):
             raise ValueError('Password must contain at least one lowercase letter')
         if not any(c.isdigit() for c in v):
             raise ValueError('Password must contain at least one digit')
+        if len(v.encode("utf-8")) > 72:
+            raise ValueError('Password must not exceed 72 bytes when UTF-8 encoded')
         return v
 
 
@@ -145,19 +154,19 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = Field(None, max_length=200)
     role: Optional[UserRoleEnum] = None
     is_active: Optional[bool] = None
-    password: Optional[str] = Field(None, min_length=8, max_length=100)
+    password: Optional[str] = Field(None, min_length=8, max_length=72)
 
 
 class UserResponse(UserBase):
     """User response (excludes password)"""
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
+    role: UserRoleEnum
     is_active: bool
     is_verified: bool
     created_at: datetime
     updated_at: Optional[datetime] = None
-    
-    class Config:
-        from_attributes = True
 
 
 class UserLogin(BaseModel):
