@@ -96,7 +96,14 @@ def get_inventory(
         query = query.filter(models.Inventory.quantity < models.Inventory.reorder_level)
 
     total = query.count()
-    items = query.offset((page - 1) * page_size).limit(page_size).all()
+    items = (
+        # Stable ordering: without it, MySQL may return rows in a different
+        # order between two pages and skip/duplicate records.
+        query.order_by(models.Inventory.warehouse_id, models.Inventory.product_id)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
     return PaginatedResponse.create(items, total, page, page_size)
 
 
@@ -118,7 +125,12 @@ def get_warehouse_inventory(
     )
 
     total = query.count()
-    items = query.offset((page - 1) * page_size).limit(page_size).all()
+    items = (
+        query.order_by(models.Inventory.warehouse_id, models.Inventory.product_id)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
     return PaginatedResponse.create(items, total, page, page_size)
 
 

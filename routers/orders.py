@@ -1,135 +1,45 @@
 """
 Orders Router
 =============
-CRUD endpoints for order management with inventory reservation.
+HTTP layer for order management.
+
+Business rules (pricing, stock reservation, status transitions) live in
+``services.orders``; this module only translates HTTP requests into service
+calls and shapes the responses.
 """
 
-from fastapi import APIRouter, HTTPException, status, Depends, Query
+from fastapi import APIRouter, Depends, Query
+from fastapi import status as http_status
+from sqlalchemy import desc
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import and_, desc
-from decimal import Decimal
-from datetime import datetime
-from uuid import uuid4
 
 import models
+from auth import get_current_user
+from database import get_db
 from schema import (
     OrderCreate,
     OrderResponse,
-    PaginatedResponse,
     OrderStatusEnum,
+    OrderUpdate,
+    PaginatedResponse,
 )
-from auth import get_current_user
-from database import get_db
+from services import orders as order_service
 
 router = APIRouter(prefix="/api/orders", tags=["Orders"])
 
 
-@router.post("", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=OrderResponse, status_code=http_status.HTTP_201_CREATED)
 def create_order(
     order: OrderCreate,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    """Create a new order with items and automatic inventory reservation."""
-    user = db.query(models.User).filter(models.User.id == order.user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    """Create an order.
 
-    subtotal = Decimal("0.00")
-    order_items_data = []
-
-    for item in order.items:
-        product = (
-            db.query(models.Product)
-            .filter(models.Product.id == item.product_id)
-            .first()
-        )
-        if not product:
-            raise HTTPException(
-                status_code=404, detail=f"Product {item.product_id} not found"
-            )
-
-        available_inventory = (
-            db.query(models.Inventory)
-            .filter(
-                and_(
-                    models.Inventory.product_id == item.product_id,
-                    models.Inventory.available_quantity >= item.quantity,
-                )
-            )
-            .first()
-        )
-        if not available_inventory:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Insufficient stock for product {item.product_id}: "
-                f"requested {item.quantity}, none available",
-            )
-
-        discount_amount = item.unit_price * (item.discount_percent / 100)
-        line_total = (item.unit_price - discount_amount) * item.quantity
-        subtotal += line_total
-
-        order_items_data.append(
-            {
-                "product_id": item.product_id,
-                "quantity": item.quantity,
-                "unit_price": item.unit_price,
-                "discount_percent": item.discount_percent,
-                "line_total": line_total,
-            }
-        )
-
-    tax_rate = Decimal("0.20")
-    tax_amount = subtotal * tax_rate
-    shipping_cost = (
-        Decimal("10.00") if subtotal < Decimal("100.00") else Decimal("0.00")
-    )
-    total_amount = subtotal + tax_amount + shipping_cost
-
-    order_number = (
-        f"ORD-{datetime.utcnow().strftime('%Y%m%d')}-{uuid4().hex[:10].upper()}"
-    )
-
-    db_order = models.Order(
-        order_number=order_number,
-        user_id=order.user_id,
-        shipping_address=order.shipping_address,
-        billing_address=order.billing_address,
-        notes=order.notes,
-        subtotal=subtotal,
-        tax_amount=tax_amount,
-        shipping_cost=shipping_cost,
-        total_amount=total_amount,
-        status=models.OrderStatus.PENDING,
-    )
-    db.add(db_order)
-    db.flush()
-
-    for item_data in order_items_data:
-        order_item = models.OrderItem(order_id=db_order.id, **item_data)
-        db.add(order_item)
-
-        inventory = (
-            db.query(models.Inventory)
-            .filter(
-                and_(
-                    models.Inventory.product_id == item_data["product_id"],
-                    models.Inventory.available_quantity >= item_data["quantity"],
-                )
-            )
-            .first()
-        )
-
-        if inventory:
-            inventory.reserved_quantity += item_data["quantity"]
-            inventory.available_quantity = (
-                inventory.quantity - inventory.reserved_quantity
-            )
-
-    db.commit()
-    db.refresh(db_order)
-    return db_order
+    The server owns the price (from `Product.unit_price`) and reserves the
+    stock atomically before writing the order.
+    """
+    return order_service.create_order(db, current_user, order)
 
 
 @router.get("", response_model=PaginatedResponse[OrderResponse])
@@ -154,7 +64,10 @@ def get_orders(
 
     total = query.count()
     items = (
-        query.order_by(desc(models.Order.ordered_at))
+        # `id` as a tie-breaker keeps pagination stable when several orders
+        # share the same timestamp (otherwise rows can be skipped/duplicated
+        # between two pages).
+        query.order_by(desc(models.Order.ordered_at), desc(models.Order.id))
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()
@@ -177,12 +90,38 @@ def get_order(
     )
 
     if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
+        raise order_service.OrderNotFound("Order not found")
 
     if (
         current_user.role.value not in ["admin", "manager"]
         and order.user_id != current_user.id
     ):
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise order_service.OrderForbidden("Access denied")
 
     return order
+
+
+@router.patch("/{order_id}", response_model=OrderResponse)
+def update_order(
+    order_id: int,
+    payload: OrderUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Update an order's status and/or shipping details (admin/manager/staff).
+
+    Status changes are validated against an explicit lifecycle:
+    PENDING -> PROCESSING -> SHIPPED -> DELIVERED, with CANCELLED allowed
+    only before shipping.
+    """
+    return order_service.update_order(db, current_user, order_id, payload)
+
+
+@router.post("/{order_id}/cancel", response_model=OrderResponse)
+def cancel_order(
+    order_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Cancel an order and release the stock it reserved."""
+    return order_service.cancel_order(db, current_user, order_id)

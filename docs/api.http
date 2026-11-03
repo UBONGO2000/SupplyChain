@@ -30,24 +30,36 @@ GET {{host}}/api/products?page=1&page_size=5
 Authorization: Bearer {{login.response.body.access_token}}
 
 ### 3. Créer une commande
-# Remarque : le prix unitaire est encore fourni par le client dans cette
-# version. La phase 3 le fera calculer côté serveur depuis Product.unit_price.
+# Le prix n'est plus envoyé par le client : le serveur lit Product.unit_price.
+# `user_id` est optionnel (par défaut : l'utilisateur authentifié).
 POST {{host}}/api/orders
 Authorization: Bearer {{login.response.body.access_token}}
 Content-Type: application/json
 
 {
-  "user_id": 1,
   "shipping_address": "12 Rue de la Logistique, 75001 Paris",
   "items": [
     {
       "product_id": 1,
       "quantity": 2,
-      "unit_price": 29.99,
       "discount_percent": 0
     }
   ]
 }
+
+### 3b. Faire avancer une commande (admin/manager/staff)
+# Cycle : Pending -> Processing -> Shipped -> Delivered
+PATCH {{host}}/api/orders/1
+Authorization: Bearer {{login.response.body.access_token}}
+Content-Type: application/json
+
+{
+  "status": "Processing"
+}
+
+### 3c. Annuler une commande et libérer le stock réservé
+POST {{host}}/api/orders/1/cancel
+Authorization: Bearer {{login.response.body.access_token}}
 
 ### 4. Alertes de stock faible
 GET {{host}}/api/analytics/low-stock-alerts

@@ -5,7 +5,7 @@ API REST pour la gestion de la chaîne d'approvisionnement. Construite avec **Fa
 [![CI](https://github.com/UBONGO2000/SupplyChain/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/UBONGO2000/SupplyChain/actions/workflows/ci.yml)
 [![Security](https://github.com/UBONGO2000/SupplyChain/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/UBONGO2000/SupplyChain/actions/workflows/security.yml)
 [![codecov](https://codecov.io/gh/UBONGO2000/SupplyChain/branch/main/graph/badge.svg)](https://codecov.io/gh/UBONGO2000/SupplyChain)
-![Tests](https://img.shields.io/badge/tests-68%20passed-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-104%20passed-brightgreen?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)
 
 ![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square)
@@ -85,15 +85,19 @@ SupplyChain/
 │   ├── products.py         # CRUD produits
 │   ├── inventory.py        # CRUD stocks + ajustements
 │   ├── shipments.py        # CRUD expéditions
-│   ├── orders.py           # CRUD commandes + réservation stock
+│   ├── orders.py           # Couche HTTP des commandes
 │   └── analytics.py        # Rapports et statistiques
+├── services/
+│   └── orders.py           # Règles métier : prix serveur, réservation atomique, cycle de vie
 ├── tests/
 │   ├── conftest.py         # Fixtures pytest (DB SQLite isolée par test)
 │   ├── test_auth.py        # Auth, JWT, RBAC, 401 sur routes protégées
-│   ├── test_orders.py      # Calcul des totaux, réservation stock, IDOR
+│   ├── test_orders.py      # Prix serveur, réservation atomique, statuts, annulation
+│   ├── test_order_service.py  # Couche services testée sans HTTP
 │   ├── test_inventory.py   # Ajustements de stock, intégrité des données
 │   ├── test_health.py      # Endpoint /health
 │   ├── test_security.py    # Régressions sécurité Phase 0 (bcrypt, CORS, /health)
+│   ├── test_errors.py      # Handlers d'erreurs (409/503) et X-Request-ID
 │   └── test_phase1.py      # Page d'accueil, compte de démo, seed non fatal
 ├── scripts/                # Scripts d'exploitation (rotation des comptes par défaut)
 ├── docs/
@@ -193,7 +197,7 @@ But : permettre de tester immédiatement tous les endpoints (Postman, Swagger, o
 
 ## Tests automatisés
 
-Suite de **68 tests** (`pytest`), **100 % de réussite**, couvrant l'authentification, la logique métier des commandes, l'intégrité des stocks et les correctifs de sécurité Phase 0/1.
+Suite de **104 tests** (`pytest`), **100 % de réussite**, couvrant l'authentification, la logique métier des commandes (prix serveur, réservation atomique, cycle de vie), l'intégrité des stocks et les correctifs de sécurité Phase 0/1.
 
 ### Lancer les tests
 
@@ -209,12 +213,14 @@ Aucune base MySQL réelle n'est nécessaire : `tests/conftest.py` redirige la d�
 | Fichier | Nb de tests | Couvre |
 |---------|:-:|--------|
 | `test_auth.py` | 33 | Inscription sans escalade de privilèges (`role`/flags → 422, rôle `viewer` forcé), doublons, mot de passe faible, login (mauvais mot de passe, compte désactivé, email), JWT (expiré, malformé, altéré), révocation immédiate après désactivation, RBAC, bootstrap admin, 401 sur 7 routes protégées |
-| `test_orders.py` | 12 | Calcul du total (taxe 20 %, seuil de livraison gratuite à 100 €, remises), réservation de stock, 404 sur produit/utilisateur inconnu, visibilité des commandes par rôle, IDOR sur `get_order` |
+| `test_orders.py` | 35 | Prix imposé par le serveur (le prix client est ignoré), réservation atomique (2ᵉ commande sur la dernière unité → 409), propriété de la commande, transitions de statut, annulation avec libération du stock, 404 sur produit/utilisateur inconnu, visibilité par rôle, IDOR |
+| `test_order_service.py` | 9 | Couche `services/orders.py` testée sans HTTP : totaux, prix serveur, rollback sur stock insuffisant, permissions, transitions invalides, annulation idempotente une seule fois |
 | `test_inventory.py` | 7 | Ajustements positifs/négatifs (avec vérification qu'un ajustement rejeté ne modifie rien en base), doublon d'inventaire, permissions staff/viewer |
 | `test_health.py` | 3 | `/health` accessible sans authentification et reflet correct de l'état de la connexion DB |
 | `test_security.py` | 8 | bcrypt direct (hash, hash corrompu, limite 72 octets), `/health` 200/503, CORS sans joker Vercel |
 | `test_phase1.py` | 5 | Page d'accueil `/`, génération/création/rotation du compte de démo, seed non fatal |
-| **Total** | **68** | |
+| `test_errors.py` | 4 | `X-Request-ID` généré/propagé, `IntegrityError` → 409, panne DB → 503 |
+| **Total** | **104** | |
 
 ### Couverture de code
 
@@ -227,22 +233,27 @@ pytest --cov=. --cov-report=term-missing
 | Module | Couverture | Détail |
 |--------|:-:|--------|
 | `routers/auth.py` | **100 %** | Register, login, `/me` entièrement couverts |
-| `routers/orders.py` | **97 %** | Totaux, réservation de stock, visibilité, IDOR — seules 2 lignes non exécutées (branche défensive) |
+| `routers/orders.py` | **95 %** | Couche HTTP fine : création, liste, détail, `PATCH` de statut, annulation |
+| `services/orders.py` | **95 %** | Prix serveur, réservation atomique, transitions, libération du stock |
 | `models.py` | 95 % | Modèles ORM exercés indirectement via les routes testées |
 | `schema.py` | 98 % | Validation Pydantic exercée par les payloads de test |
-| `main.py` | 76 % | Bootstrap admin, page d'accueil, `/health`, seed non fatal |
+| `main.py` | 82 % | Bootstrap admin, page d'accueil, `/health`, seed non fatal, handlers d'erreurs |
 | `routers/inventory.py` | 71 % | Création, ajustement, permissions couverts ; listing/pagination non testés (hors périmètre) |
 | `auth.py` (module JWT/RBAC) | 80 % | `create_access_token`, `decode_token`, `require_role` couverts ; `create_refresh_token` non utilisé/non testé |
 | `cli.py` | 58 % | Commandes `seed-demo` et `create-demo-user` couvertes ; branches d'erreur non testées |
-| **Total du projet** | **82 %** | |
+| **Total du projet** | **86 %** | |
 
-Les routers `products.py`, `warehouses.py`, `suppliers.py`, `shipments.py` et `analytics.py` (31–52 % de couverture) ne faisaient pas partie du périmètre demandé (Auth, Orders, Inventory) et n'ont donc pas de tests dédiés à ce stade. `seed_data.py` (25 %) est un script de peuplement de données de démo, exercé uniquement via les tests de la Phase 1.
+Les routers `products.py`, `warehouses.py`, `suppliers.py`, `shipments.py` et `analytics.py` (31–52 % de couverture) ne faisaient pas partie du périmètre demandé (Auth, Orders, Inventory) et n'ont donc pas de tests dédiés à ce stade. `seed_data.py` (28 %) est un script de peuplement de données de démo, exercé uniquement via les tests de la Phase 1.
 
 ### Bugs identifiés et corrigés grâce à cette suite
 
-1. **Commande sans stock disponible acceptée silencieusement** (`routers/orders.py`) — une commande sur un produit sans aucun enregistrement d'inventaire suffisant était créée sans réservation, sans erreur. Corrigé : renvoie désormais **409 Conflict**, la commande n'est pas créée.
-2. **Collision de numéro de commande** (`routers/orders.py`) — `order_number` était généré à partir d'un timestamp en secondes ; deux commandes créées dans la même seconde produisaient le même numéro et la seconde échouait avec une erreur 500 (contrainte UNIQUE). Corrigé en ajoutant un suffixe UUID.
+1. **Commande sans stock disponible acceptée silencieusement** (`services/orders.py`) — une commande sur un produit sans aucun enregistrement d'inventaire suffisant était créée sans réservation, sans erreur. Corrigé : renvoie désormais **409 Conflict**, la commande n'est pas créée.
+2. **Collision de numéro de commande** (`services/orders.py`) — `order_number` était généré à partir d'un timestamp en secondes ; deux commandes créées dans la même seconde produisaient le même numéro et la seconde échouait avec une erreur 500 (contrainte UNIQUE). Corrigé en ajoutant un suffixe UUID.
 3. **Rôle utilisateur stocké de façon incorrecte** (`routers/auth.py`, `main.py`) — le rôle était assigné comme chaîne brute en minuscules (`"staff"`) à une colonne `Enum(UserRole)` qui attend le nom de l'enum (`"STAFF"`). Sur MySQL ce défaut passait inaperçu grâce à la normalisation insensible à la casse des colonnes ENUM natives, mais restait un point fragile pouvant faire échouer la lecture d'un utilisateur (donc le login) sur un autre moteur ou après un changement de collation. Corrigé en assignant un véritable membre d'enum (`models.UserRole(...)`).
+4. **Prix fixé par le client** (`services/orders.py`) — `unit_price` venait du payload : n'importe qui pouvait commander un produit à 0,01 €. Corrigé : le prix est toujours lu dans `Product.unit_price`, la valeur client est ignorée (test dédié).
+5. **Réservation non atomique** (`services/orders.py`) — la vérification de stock et la réservation étaient deux requêtes distinctes : deux commandes simultanées pouvaient réserver la même dernière unité. Corrigé par `SELECT ... FOR UPDATE` dans un ordre de verrouillage déterministe (produits triés), et **409** si le stock total est insuffisant.
+6. **Aucune libération de stock** (`services/orders.py`) — annuler une commande laissait la réservation en place. Corrigé : `POST /api/orders/{id}/cancel` libère la réservation, et l'expédition décrémente la quantité physique.
+7. **Cycle de statut non validé** (`services/orders.py`) — n'importe quel statut pouvait être écrit. Corrigé par un graphe de transitions explicite (`Pending → Processing → Shipped → Delivered`, annulation avant expédition uniquement).
 
 ---
 
@@ -252,7 +263,7 @@ Trois workflows GitHub Actions dans `.github/workflows/` :
 
 | Workflow | Déclencheur | Ce qu'il fait |
 |----------|-------------|----------------|
-| **CI** (`ci.yml`) | Push sur `main`, Pull Request | `black --check` + `flake8` (lint), `pytest` (68 tests), couverture envoyée à Codecov |
+| **CI** (`ci.yml`) | Push sur `main`, Pull Request | `black --check` + `flake8` (lint), `pytest` (104 tests), couverture envoyée à Codecov |
 | **Sécurité** (`security.yml`) | Push sur `main`, chaque lundi 06:00 UTC, déclenchement manuel | Scan statique `bandit`, audit des dépendances `pip-audit` |
 | **CD** (`cd.yml`) | Fin du workflow CI sur `main`, uniquement s'il a réussi | Déclenche le déploiement sur Render via un *deploy hook* |
 
@@ -275,7 +286,7 @@ Render a son propre système d'auto-déploiement sur push GitHub, indépendant d
 ### État du scan de sécurité (référence)
 
 - `bandit` : **0 issue** (les faux positifs pré-existants — mots de passe de démo, bind `0.0.0.0`, littéral `"bearer"` — sont documentés avec `# nosec` inline, code par code, plutôt que masqués globalement).
-- `pip-audit` : **0 finding ouvert**. En calibrant ce workflow, un premier scan avait remonté 34 vulnérabilités connues sur des dépendances figées (`fastapi`, `starlette`, `python-jose`, `python-multipart`, `gunicorn`, `pytest`, `python-dotenv`, `pymysql`, `black`). Toutes ont été corrigées en mettant à jour ces paquets (`fastapi` 0.109→0.141, `starlette` 0.35→1.6, `pytest` 7→9, etc.), en revalidant à chaque étape que les 68 tests, `black`, `flake8` et `bandit` restaient au vert.
+- `pip-audit` : **0 finding ouvert**. En calibrant ce workflow, un premier scan avait remonté 34 vulnérabilités connues sur des dépendances figées (`fastapi`, `starlette`, `python-jose`, `python-multipart`, `gunicorn`, `pytest`, `python-dotenv`, `pymysql`, `black`). Toutes ont été corrigées en mettant à jour ces paquets (`fastapi` 0.109→0.141, `starlette` 0.35→1.6, `pytest` 7→9, etc.), en revalidant à chaque étape que les 104 tests, `black`, `flake8` et `bandit` restaient au vert.
   - La seule vulnérabilité restante, `ecdsa==0.19.2` (`PYSEC-2026-1325`), n'a **aucune version corrigée publiée** — c'est une attaque par canal temporel dans l'implémentation Python pure, que les mainteneurs ont explicitement choisi de ne pas corriger. C'est une dépendance transitive de `python-jose[cryptography]`, utilisée uniquement pour les algorithmes JWT à base d'ECDSA (`ES256`...) ; ce projet signe ses tokens en **`HS256`** (voir `ALGORITHM` dans `config.py`), donc le code vulnérable n'est jamais exécuté ici. Exclue explicitement via `--ignore-vuln PYSEC-2026-1325` dans `security.yml`, avec la justification en commentaire — pas masquée en silence.
 
 ---
@@ -531,8 +542,10 @@ Le script ne désactive un compte que si son mot de passe actuel correspond enco
 | Méthode | Endpoint | Description | Accès |
 |---------|----------|-------------|-------|
 | GET | `/api/orders` | Liste (les utilisateurs voient les leurs) | Authentifié |
-| POST | `/api/orders` | Créer (réservation auto du stock, 409 si stock insuffisant) | Authentifié |
+| POST | `/api/orders` | Créer : prix lu en base, réservation atomique, 409 si stock insuffisant | Authentifié |
 | GET | `/api/orders/{id}` | Détail (403 si ce n'est pas le propriétaire, sauf Admin/Manager) | Propriétaire/Admin |
+| PATCH | `/api/orders/{id}` | Changer le statut (`Pending → Processing → Shipped → Delivered`) ou l'adresse | Admin/Manager/Staff |
+| POST | `/api/orders/{id}/cancel` | Annuler et libérer le stock réservé (impossible après expédition) | Propriétaire/Admin/Manager |
 
 ### Expéditions
 
@@ -588,13 +601,14 @@ curl -X POST "https://supplychain-39y0.onrender.com/api/orders" \
   -H "Authorization: Bearer <votre_token>" \
   -H "Content-Type: application/json" \
   -d '{
-    "user_id": 1,
     "shipping_address": "123 Rue Example, Paris",
     "items": [
-      {"product_id": 1, "quantity": 2, "unit_price": 29.99, "discount_percent": 10}
+      {"product_id": 1, "quantity": 2, "discount_percent": 10}
     ]
   }'
 ```
+
+Le prix n'est pas envoyé par le client : le serveur lit `Product.unit_price` au moment de la commande. `user_id` est optionnel et vaut par défaut l'utilisateur authentifié (seuls Admin/Manager peuvent commander pour un autre compte).
 
 ---
 
