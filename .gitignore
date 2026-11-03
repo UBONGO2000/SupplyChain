@@ -68,3 +68,6 @@ temp/
 # (contain old demo credentials and vulnerability details: never publish)
 AUDIT.md
 PLAN_ALTERNANCE.md
+
+# Personal portfolio metadata, not part of the API
+project.json
