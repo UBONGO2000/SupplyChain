@@ -3,12 +3,16 @@ Priority 1 -- Auth & security.
 
 Covers registration, login, JWT validation, and role-based access control
 (require_role). This is the foundation everything else depends on.
+
+Phase 0 hardened the public registration endpoint: the client can no longer
+choose its role, and extra privilege flags are rejected with 422.
 """
 
 from datetime import timedelta
 
 import pytest
 
+import main
 import models
 from auth import create_access_token, verify_password
 from conftest import make_user, auth_headers
@@ -21,7 +25,6 @@ def _register_payload(**overrides):
         "email": "newuser@example.com",
         "username": "newuser",
         "full_name": "New User",
-        "role": "staff",
         "password": VALID_PASSWORD,
     }
     payload.update(overrides)
@@ -32,14 +35,14 @@ def _register_payload(**overrides):
 # Register
 # ============================================
 class TestRegister:
-    def test_register_success_assigns_role_and_hashes_password(
+    def test_register_assigns_least_privilege_and_hashes_password(
         self, client, db_session
     ):
-        resp = client.post("/api/auth/register", json=_register_payload(role="manager"))
+        resp = client.post("/api/auth/register", json=_register_payload())
 
         assert resp.status_code == 201
         body = resp.json()
-        assert body["role"] == "manager"
+        assert body["role"] == "viewer"
         assert "password" not in body
         assert "hashed_password" not in body
 
@@ -49,10 +52,35 @@ class TestRegister:
             .first()
         )
         assert db_user is not None
-        assert db_user.role.value == "manager"
+        assert db_user.role == models.UserRole.VIEWER
         # The core security property: the stored hash is never the raw password.
         assert db_user.hashed_password != VALID_PASSWORD
         assert verify_password(VALID_PASSWORD, db_user.hashed_password) is True
+
+    @pytest.mark.parametrize("role", ["admin", "manager", "staff", "viewer"])
+    def test_register_rejects_client_supplied_role(self, client, db_session, role):
+        """Mass assignment must not let a client pick its privileges."""
+        resp = client.post("/api/auth/register", json=_register_payload(role=role))
+
+        assert resp.status_code == 422
+        assert db_session.query(models.User).count() == 0
+
+    def test_register_rejects_extra_privilege_flags(self, client, db_session):
+        resp = client.post(
+            "/api/auth/register",
+            json=_register_payload(is_active=True, is_verified=True),
+        )
+
+        assert resp.status_code == 422
+        assert db_session.query(models.User).count() == 0
+
+    def test_register_rejects_weak_password(self, client):
+        resp = client.post(
+            "/api/auth/register",
+            json=_register_payload(password="alllowercase1"),
+        )
+
+        assert resp.status_code == 422
 
     def test_register_duplicate_email_rejected(self, client):
         first = client.post(
@@ -125,6 +153,16 @@ class TestLogin:
         assert body["access_token"]
         assert body["user"]["username"] == "carol"
 
+    def test_login_accepts_email_as_identifier(self, client, db_session):
+        make_user(db_session, "dana", password=VALID_PASSWORD)
+
+        resp = client.post(
+            "/api/auth/login",
+            json={"username": "dana@example.com", "password": VALID_PASSWORD},
+        )
+
+        assert resp.status_code == 200
+
 
 # ============================================
 # JWT validation
@@ -172,6 +210,18 @@ class TestJWT:
         assert body["username"] == "frank"
         assert body["username"] != user_b.username
 
+    def test_deactivated_user_token_is_rejected_immediately(self, client, db_session):
+        """SEC-04: a deactivated account must lose access before token expiry."""
+        user = make_user(db_session, "henry", password=VALID_PASSWORD)
+        headers = auth_headers(user)
+
+        assert client.get("/api/auth/me", headers=headers).status_code == 200
+
+        user.is_active = False
+        db_session.commit()
+
+        assert client.get("/api/auth/me", headers=headers).status_code == 401
+
 
 # ============================================
 # RBAC (require_role)
@@ -204,6 +254,72 @@ class TestRBAC:
         )
 
         assert resp.status_code == 201
+
+
+# ============================================
+# Bootstrap administrator (Phase 0)
+# ============================================
+class TestBootstrapAdmin:
+    def test_startup_creates_no_default_account(self, client, db_session):
+        """The four published demo accounts must never be recreated."""
+        assert db_session.query(models.User).count() == 0
+
+    def test_bootstrap_is_opt_in(self, db_session, monkeypatch, session_factory):
+        monkeypatch.setattr(main.database, "SessionLocal", session_factory)
+
+        main.bootstrap_admin()
+
+        assert db_session.query(models.User).count() == 0
+
+    def test_bootstrap_creates_admin_from_environment(
+        self, db_session, monkeypatch, session_factory
+    ):
+        monkeypatch.setattr(main.database, "SessionLocal", session_factory)
+        monkeypatch.setattr(main, "BOOTSTRAP_ADMIN_EMAIL", "boss@example.com")
+        monkeypatch.setattr(main, "BOOTSTRAP_ADMIN_PASSWORD", "BootstrapPass123!")
+        monkeypatch.setattr(main, "BOOTSTRAP_ADMIN_USERNAME", None)
+
+        main.bootstrap_admin()
+
+        user = (
+            db_session.query(models.User)
+            .filter(models.User.email == "boss@example.com")
+            .one()
+        )
+        assert user.username == "boss"
+        assert user.role == models.UserRole.ADMIN
+        assert verify_password("BootstrapPass123!", user.hashed_password)
+
+        # Idempotent: a redeploy must not duplicate or reset the account.
+        main.bootstrap_admin()
+        assert (
+            db_session.query(models.User)
+            .filter(models.User.email == "boss@example.com")
+            .count()
+            == 1
+        )
+
+    def test_bootstrap_requires_both_credentials(
+        self, db_session, monkeypatch, session_factory
+    ):
+        monkeypatch.setattr(main.database, "SessionLocal", session_factory)
+        monkeypatch.setattr(main, "BOOTSTRAP_ADMIN_EMAIL", "boss@example.com")
+        monkeypatch.setattr(main, "BOOTSTRAP_ADMIN_PASSWORD", None)
+
+        with pytest.raises(ValueError):
+            main.bootstrap_admin()
+
+    def test_bootstrap_rejects_a_short_password(
+        self, db_session, monkeypatch, session_factory
+    ):
+        monkeypatch.setattr(main.database, "SessionLocal", session_factory)
+        monkeypatch.setattr(main, "BOOTSTRAP_ADMIN_EMAIL", "boss@example.com")
+        monkeypatch.setattr(main, "BOOTSTRAP_ADMIN_PASSWORD", "short")
+
+        with pytest.raises(ValueError):
+            main.bootstrap_admin()
+
+        assert db_session.query(models.User).count() == 0
 
 
 # ============================================

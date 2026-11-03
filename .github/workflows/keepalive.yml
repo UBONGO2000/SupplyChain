@@ -1,0 +1,24 @@
+name: Keepalive
+
+# Render's free tier sleeps after ~15 minutes of inactivity, so the first
+# visitor waits ~50 seconds. A scheduled ping keeps the demo responsive.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping /health
+        run: |
+          code=$(curl --silent --show-error --location \
+            --max-time 90 --retry 2 --retry-delay 10 \
+            --output /dev/null --write-out '%{http_code}' \
+            https://supplychain-39y0.onrender.com/health)
+          echo "HTTP $code"
+          test "$code" = "200"

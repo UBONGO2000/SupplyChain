@@ -1,18 +1,27 @@
 """
 FastAPI Application - Supply Chain Management API
 ==================================================
-A production-ready REST API for managing supply chain operations.
+A REST API for managing supply chain operations.
 """
 
+import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from datetime import datetime
+from datetime import datetime, timezone
 
-import models
+from fastapi import FastAPI, Response
+from fastapi.middleware.cors import CORSMiddleware
+
 import database
 from auth import get_password_hash
-from config import CORS_ORIGINS
+from config import (
+    APP_ENV,
+    BOOTSTRAP_ADMIN_EMAIL,
+    BOOTSTRAP_ADMIN_PASSWORD,
+    BOOTSTRAP_ADMIN_USERNAME,
+    CORS_ORIGIN_REGEX,
+    CORS_ORIGINS,
+    SEED_DEMO_DATA,
+)
 from routers import (
     auth_router,
     warehouses_router,
@@ -24,69 +33,77 @@ from routers import (
     analytics_router,
 )
 
+logger = logging.getLogger("supplychain")
+
+APP_NAME = "Supply Chain Management API"
+APP_VERSION = "1.0.0"
+
+DEMO_CREDENTIALS_HINT = (
+    "No public demo account is shipped with the repository. Create one with "
+    "`python -m cli create-demo-user` (or `docker compose up` for the local "
+    "demo) and keep the printed password private."
+)
+
 
 # ============================================
-# Default Users Initialization
+# Bootstrap Administrator (opt-in)
 # ============================================
-def create_default_users():
-    """Create default users if they don't exist."""
-    from models import User
+def bootstrap_admin() -> None:
+    """Create the first administrator from environment variables.
+
+    There are deliberately no hardcoded accounts anymore: shipping a known
+    admin/password pair in the repository gives anyone full access to any
+    environment that did not change it. Both BOOTSTRAP_ADMIN_EMAIL and
+    BOOTSTRAP_ADMIN_PASSWORD must be provided, and an existing account is
+    left untouched so that redeploys never reset a rotated password.
+    """
+    if not BOOTSTRAP_ADMIN_EMAIL and not BOOTSTRAP_ADMIN_PASSWORD:
+        return
+
+    if not BOOTSTRAP_ADMIN_EMAIL or not BOOTSTRAP_ADMIN_PASSWORD:
+        raise ValueError(
+            "BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_PASSWORD must be set together"
+        )
+
+    if len(BOOTSTRAP_ADMIN_PASSWORD) < 12:
+        raise ValueError("BOOTSTRAP_ADMIN_PASSWORD must be at least 12 characters long")
+
+    from models import User, UserRole
+
+    username = BOOTSTRAP_ADMIN_USERNAME or BOOTSTRAP_ADMIN_EMAIL.split("@")[0]
 
     db = database.SessionLocal()
     try:
-        # nosec B105 (x4 below): these are the documented, public demo
-        # credentials listed in README.md, not real secrets.
-        default_users = [
-            {
-                "email": "admin@supplychain.com",
-                "username": "admin",
-                "password": "Admin123!",  # nosec B105
-                "full_name": "System Administrator",
-                "role": "admin",
-            },
-            {
-                "email": "manager@supplychain.com",
-                "username": "manager",
-                "password": "Manager123!",  # nosec B105
-                "full_name": "Supply Chain Manager",
-                "role": "manager",
-            },
-            {
-                "email": "staff@supplychain.com",
-                "username": "staff",
-                "password": "Staff123!",  # nosec B105
-                "full_name": "Warehouse Staff",
-                "role": "staff",
-            },
-            {
-                "email": "viewer@supplychain.com",
-                "username": "viewer",
-                "password": "Viewer123!",  # nosec B105
-                "full_name": "Viewer User",
-                "role": "viewer",
-            },
-        ]
+        if db.query(User).filter(User.email == BOOTSTRAP_ADMIN_EMAIL).first():
+            print("Bootstrap: administrator already exists, nothing to do.")
+            return
 
-        for user_data in default_users:
-            existing_user = (
-                db.query(User).filter(User.username == user_data["username"]).first()
+        if db.query(User).filter(User.username == username).first():
+            raise ValueError(
+                f"Bootstrap: username '{username}' is already taken, "
+                "set BOOTSTRAP_ADMIN_USERNAME to choose another one"
             )
-            if not existing_user:
-                hashed_password = get_password_hash(user_data["password"])
-                new_user = User(
-                    email=user_data["email"],
-                    username=user_data["username"],
-                    hashed_password=hashed_password,
-                    full_name=user_data["full_name"],
-                    role=models.UserRole(user_data["role"]),
-                    is_active=True,
-                )
-                db.add(new_user)
 
+        db.add(
+            User(
+                email=BOOTSTRAP_ADMIN_EMAIL,
+                username=username,
+                hashed_password=get_password_hash(BOOTSTRAP_ADMIN_PASSWORD),
+                full_name="Bootstrap Administrator",
+                role=UserRole.ADMIN,
+                is_active=True,
+            )
+        )
         db.commit()
-    except Exception as e:
+        print(f"Bootstrap: administrator '{username}' created.")
+    except ValueError:
         db.rollback()
-        print(f"Warning: Could not create default users: {e}")
+        raise
+    except (
+        Exception
+    ) as exc:  # noqa: BLE001 - startup must not fail on a transient DB error
+        db.rollback()
+        print(f"Warning: could not create the bootstrap administrator: {exc}")
     finally:
         db.close()
 
@@ -103,12 +120,24 @@ async def lifespan(app: FastAPI):
     anymore. create_all() only creates missing tables and silently ignores
     column changes on existing tables, which caused schema drift in
     production. Alembic replaces it entirely.
+
+    Demo data is opt-in (SEED_DEMO_DATA=true) so that a production database
+    never gets sample rows and a failing seed can never prevent the API from
+    starting.
     """
-    create_default_users()
+    if APP_ENV != "test":
+        bootstrap_admin()
 
-    from seed_data import seed_demo_data
+        if SEED_DEMO_DATA:
+            # The seed is a convenience for demos, never a startup
+            # requirement: a database hiccup must not keep the API down.
+            try:
+                from seed_data import seed_demo_data
 
-    seed_demo_data()
+                if not seed_demo_data():
+                    logger.warning("Demo seed failed; starting the API anyway.")
+            except Exception:  # noqa: BLE001 - startup must not depend on the seed
+                logger.exception("Demo seed crashed; starting the API anyway.")
 
     yield
 
@@ -117,9 +146,9 @@ async def lifespan(app: FastAPI):
 # Application Initialization
 # ============================================
 app = FastAPI(
-    title="Supply Chain Management API",
+    title=APP_NAME,
     description="Comprehensive API for managing supply chain operations",
-    version="1.0.0",
+    version=APP_VERSION,
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -132,9 +161,10 @@ origins = [o.strip() for o in CORS_ORIGINS.split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins if origins != ["*"] else ["*"],
-    # Allow any *.vercel.app subdomain (frontend deployed on Vercel)
-    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_origins=origins,
+    # Empty by default: trusting every *.vercel.app origin would let any
+    # attacker-owned deployment call the API with credentials.
+    allow_origin_regex=CORS_ORIGIN_REGEX or None,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -155,15 +185,40 @@ app.include_router(analytics_router)
 
 
 # ============================================
+# Landing Page
+# ============================================
+@app.get("/", tags=["System"])
+def root():
+    """Landing page.
+
+    Opening the deployed URL used to return a bare 404, which looks like a
+    broken deployment. A JSON index makes the service self-describing.
+    """
+    return {
+        "name": APP_NAME,
+        "version": APP_VERSION,
+        "docs": "/docs",
+        "redoc": "/redoc",
+        "health": "/health",
+        "demo_credentials_hint": DEMO_CREDENTIALS_HINT,
+    }
+
+
+# ============================================
 # Health Check Endpoint
 # ============================================
 @app.get("/health", tags=["Health"])
-def health_check():
-    """Health check endpoint."""
+def health_check(response: Response):
+    """Health check endpoint.
+
+    Returns 503 when the database is unreachable, so uptime monitors and
+    orchestrators see an actual failure instead of a green status forever.
+    """
+    db_connected = database.check_database_connection()
+    response.status_code = 200 if db_connected else 503
+
     return {
-        "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat(),
-        "database": (
-            "connected" if database.check_database_connection() else "disconnected"
-        ),
+        "status": "healthy" if db_connected else "degraded",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "database": "connected" if db_connected else "disconnected",
     }

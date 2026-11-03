@@ -15,14 +15,20 @@ import models
 from database import SessionLocal
 
 
-def seed_demo_data() -> None:
+def seed_demo_data() -> bool:
     """Insert demo warehouses, suppliers, products, inventory, shipments
-    and orders if the database is empty. No-op otherwise."""
-    db = SessionLocal()
+    and orders if the database is empty. No-op otherwise.
+
+    Returns True when the database is ready (seeded or already populated) and
+    False when seeding failed, so callers can log a warning instead of
+    preventing the API from starting.
+    """
+    db = None
     try:
+        db = SessionLocal()
         if db.query(models.Warehouse).first():
             print("Seed: demo data already present, skipping.")
-            return
+            return True
 
         print("Seed: populating demo data...")
 
@@ -392,19 +398,18 @@ def seed_demo_data() -> None:
 
         # ---------------------------------------------------------
         # Orders + OrderItems
-        # (attach to the seeded default users created by create_default_users)
+        # Attached to an existing user (the bootstrap administrator when
+        # present, otherwise the first user). Skipped when the database has
+        # no user yet: the seed must never create authentication accounts.
         # ---------------------------------------------------------
-        admin_user = (
-            db.query(models.User).filter(models.User.username == "admin").first()
-        )
-        staff_user = (
-            db.query(models.User).filter(models.User.username == "staff").first()
-        )
+        owner = db.query(models.User).order_by(models.User.id).first()
 
-        if admin_user:
+        if owner is None:
+            print("Seed: no user found, skipping demo orders.")
+        else:
             order1 = models.Order(
                 order_number="ORD-2026-0001",
-                user_id=admin_user.id,
+                user_id=owner.id,
                 status=models.OrderStatus.DELIVERED,
                 subtotal=239.79,
                 tax_amount=23.98,
@@ -446,10 +451,9 @@ def seed_demo_data() -> None:
                 ]
             )
 
-        if staff_user:
             order2 = models.Order(
                 order_number="ORD-2026-0002",
-                user_id=staff_user.id,
+                user_id=owner.id,
                 status=models.OrderStatus.PROCESSING,
                 subtotal=178.00,
                 tax_amount=17.80,
@@ -480,10 +484,19 @@ def seed_demo_data() -> None:
             f"{len(products)} products, {len(inventory_rows)} inventory rows, "
             f"{len(shipments)} shipments, 2 orders)."
         )
+        return True
 
     except Exception as e:
-        db.rollback()
+        if db is not None:
+            db.rollback()
         print(f"Seed: failed to create demo data: {e}")
-        raise
+        return False
     finally:
-        db.close()
+        if db is not None:
+            db.close()
+
+
+if __name__ == "__main__":
+    # Manual run: `python seed_data.py` (prefer `python -m cli seed-demo`,
+    # which also exposes the demo-account command).
+    raise SystemExit(0 if seed_demo_data() else 1)

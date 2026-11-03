@@ -1,0 +1,53 @@
+services:
+  db:
+    image: mysql:8.0
+    command: --default-authentication-plugin=mysql_native_password
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: supplychain
+      MYSQL_USER: supplychain
+      MYSQL_PASSWORD: supplychain
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  api:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: mysql+pymysql://supplychain:supplychain@db:3306/supplychain
+      DB_SSL: "false"
+      # Local development only: never reuse this value anywhere else.
+      SECRET_KEY: docker-compose-dev-secret-key-change-me-1234
+      APP_ENV: development
+      CORS_ORIGINS: http://localhost:3000,http://localhost:5173
+      # One-command demo: creates demo/demo account and sample data.
+      CREATE_DEMO_USER: "true"
+      DEMO_USER_EMAIL: demo@example.com
+      DEMO_USER_USERNAME: demo
+      DEMO_USER_PASSWORD: "DemoPass123!"
+      SEED_DEMO_DATA: "true"
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test:
+        - "CMD"
+        - "python"
+        - "-c"
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  mysql_data:

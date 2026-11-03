@@ -63,3 +63,8 @@ logs/
 tmp/
 temp/
 *.tmp
+
+# Internal audit / planning documents
+# (contain old demo credentials and vulnerability details: never publish)
+AUDIT.md
+PLAN_ALTERNANCE.md

@@ -13,11 +13,19 @@ from sqlalchemy.orm import sessionmaker, declarative_base, Session
 from sqlalchemy.pool import QueuePool
 from typing import Generator
 
-from config import DATABASE_URL
+from config import DATABASE_URL, DB_SSL
 
 # ============================================
 # Engine Configuration with Connection Pooling
 # ============================================
+# MySQL/TiDB-specific options are only applied on MySQL, so the same codebase
+# can run against SQLite in tests or a local MySQL without TLS.
+_connect_args: dict = {}
+if DATABASE_URL.startswith("mysql"):
+    _connect_args = {"charset": "utf8mb4"}
+    if DB_SSL:
+        _connect_args["ssl"] = {"ssl": {}}
+
 engine = create_engine(
     DATABASE_URL,
     poolclass=QueuePool,
@@ -26,28 +34,27 @@ engine = create_engine(
     pool_pre_ping=True,
     pool_recycle=3600,
     echo=False,
-    connect_args={
-        "charset": "utf8mb4",
-        "ssl": {"ssl": {}},
-    },
+    connect_args=_connect_args,
 )
 
 
 # ============================================
 # Enable strict SQL mode for MySQL
 # ============================================
-@event.listens_for(engine, "connect")
-def set_sql_mode(dbapi_connection, connection_record):
-    """
-    Set MySQL session variables for proper foreign key support
-    and strict SQL mode for data integrity.
-    """
-    cursor = dbapi_connection.cursor()
-    cursor.execute(
-        "SET SESSION sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,"
-        "ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'"
-    )
-    cursor.close()
+if engine.dialect.name == "mysql":
+
+    @event.listens_for(engine, "connect")
+    def set_sql_mode(dbapi_connection, connection_record):
+        """
+        Set MySQL session variables for proper foreign key support
+        and strict SQL mode for data integrity.
+        """
+        cursor = dbapi_connection.cursor()
+        cursor.execute(
+            "SET SESSION sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,"
+            "ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'"
+        )
+        cursor.close()
 
 
 # ============================================

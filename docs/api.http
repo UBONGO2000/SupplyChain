@@ -1,0 +1,62 @@
+# Supply Chain API — collection d'appels
+#
+# Compatible avec l'extension VS Code "REST Client" (humao.rest-client).
+# Ouvre ce fichier, clique sur "Send Request" au-dessus de chaque bloc.
+#
+# Prérequis :
+#   - API lancée en local (uvicorn main:app --reload) ou Docker (docker compose up)
+#   - compte de démo créé : python -m cli create-demo-user
+#     (docker compose le crée automatiquement : demo / DemoPass123!)
+
+@host = http://localhost:8000
+@username = demo
+@password = DemoPass123!
+
+### 0. Santé de l'API
+GET {{host}}/health
+
+### 1. Connexion — récupère le JWT
+# @name login
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{username}}",
+  "password": "{{password}}"
+}
+
+### 2. Liste des produits (paginée)
+GET {{host}}/api/products?page=1&page_size=5
+Authorization: Bearer {{login.response.body.access_token}}
+
+### 3. Créer une commande
+# Remarque : le prix unitaire est encore fourni par le client dans cette
+# version. La phase 3 le fera calculer côté serveur depuis Product.unit_price.
+POST {{host}}/api/orders
+Authorization: Bearer {{login.response.body.access_token}}
+Content-Type: application/json
+
+{
+  "user_id": 1,
+  "shipping_address": "12 Rue de la Logistique, 75001 Paris",
+  "items": [
+    {
+      "product_id": 1,
+      "quantity": 2,
+      "unit_price": 29.99,
+      "discount_percent": 0
+    }
+  ]
+}
+
+### 4. Alertes de stock faible
+GET {{host}}/api/analytics/low-stock-alerts
+Authorization: Bearer {{login.response.body.access_token}}
+
+### 5. Top produits
+GET {{host}}/api/analytics/top-products?limit=5
+Authorization: Bearer {{login.response.body.access_token}}
+
+### 6. Résumé des ventes (admin/manager uniquement)
+GET {{host}}/api/analytics/sales-summary
+Authorization: Bearer {{login.response.body.access_token}}
