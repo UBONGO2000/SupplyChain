@@ -5,11 +5,15 @@ A REST API for managing supply chain operations.
 """
 
 import logging
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from uuid import uuid4
 
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 import database
 from auth import get_password_hash
@@ -32,6 +36,7 @@ from routers import (
     orders_router,
     analytics_router,
 )
+from services.orders import OrderError
 
 logger = logging.getLogger("supplychain")
 
@@ -75,7 +80,7 @@ def bootstrap_admin() -> None:
     db = database.SessionLocal()
     try:
         if db.query(User).filter(User.email == BOOTSTRAP_ADMIN_EMAIL).first():
-            print("Bootstrap: administrator already exists, nothing to do.")
+            logger.info("Bootstrap: administrator already exists, nothing to do.")
             return
 
         if db.query(User).filter(User.username == username).first():
@@ -95,7 +100,7 @@ def bootstrap_admin() -> None:
             )
         )
         db.commit()
-        print(f"Bootstrap: administrator '{username}' created.")
+        logger.info("Bootstrap: administrator '%s' created.", username)
     except ValueError:
         db.rollback()
         raise
@@ -103,7 +108,7 @@ def bootstrap_admin() -> None:
         Exception
     ) as exc:  # noqa: BLE001 - startup must not fail on a transient DB error
         db.rollback()
-        print(f"Warning: could not create the bootstrap administrator: {exc}")
+        logger.warning("Could not create the bootstrap administrator: %s", exc)
     finally:
         db.close()
 
@@ -170,6 +175,66 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"],
 )
+
+
+# ============================================
+# Request Context Middleware
+# ============================================
+@app.middleware("http")
+async def request_context(request: Request, call_next):
+    """Attach a request id to every response and log one line per request.
+
+    The id is echoed from the `X-Request-ID` header when the caller provides
+    one, so a trace can be followed across a proxy or a frontend.
+    """
+    request_id = request.headers.get("X-Request-ID") or uuid4().hex
+    started = time.perf_counter()
+
+    response = await call_next(request)
+
+    duration_ms = (time.perf_counter() - started) * 1000
+    response.headers["X-Request-ID"] = request_id
+    logger.info(
+        "%s %s -> %s in %.1f ms [request_id=%s]",
+        request.method,
+        request.url.path,
+        response.status_code,
+        duration_ms,
+        request_id,
+    )
+    return response
+
+
+# ============================================
+# Exception Handlers
+# ============================================
+@app.exception_handler(OrderError)
+async def order_error_handler(request: Request, exc: OrderError):
+    """Map order business errors to their HTTP status."""
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+
+@app.exception_handler(IntegrityError)
+async def integrity_error_handler(request: Request, exc: IntegrityError):
+    """A unique/foreign-key constraint was violated: 409, never a raw 500."""
+    logger.warning(
+        "Integrity error on %s %s: %s", request.method, request.url.path, exc
+    )
+    return JSONResponse(
+        status_code=409,
+        content={"detail": "The request conflicts with an existing record"},
+    )
+
+
+@app.exception_handler(SQLAlchemyError)
+async def database_error_handler(request: Request, exc: SQLAlchemyError):
+    """Any other database failure is a dependency outage: 503, not a crash."""
+    logger.error("Database error on %s %s: %s", request.method, request.url.path, exc)
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Database temporarily unavailable"},
+    )
+
 
 # ============================================
 # Include Routers

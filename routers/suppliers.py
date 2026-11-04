@@ -50,7 +50,12 @@ def get_suppliers(
         query = query.filter(models.Supplier.rating >= min_rating)
 
     total = query.count()
-    items = query.offset((page - 1) * page_size).limit(page_size).all()
+    items = (
+        query.order_by(models.Supplier.id)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
     return PaginatedResponse.create(items, total, page, page_size)
 
 

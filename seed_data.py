@@ -9,10 +9,13 @@ Idempotent by design: safe to call on every deploy/startup, it only inserts
 data the first time (checked via the absence of any Warehouse row).
 """
 
+import logging
 from datetime import datetime, timedelta
 
 import models
 from database import SessionLocal
+
+logger = logging.getLogger("supplychain.seed")
 
 
 def seed_demo_data() -> bool:
@@ -27,10 +30,10 @@ def seed_demo_data() -> bool:
     try:
         db = SessionLocal()
         if db.query(models.Warehouse).first():
-            print("Seed: demo data already present, skipping.")
+            logger.info("Seed: demo data already present, skipping.")
             return True
 
-        print("Seed: populating demo data...")
+        logger.info("Seed: populating demo data...")
 
         # ---------------------------------------------------------
         # Warehouses
@@ -405,7 +408,7 @@ def seed_demo_data() -> bool:
         owner = db.query(models.User).order_by(models.User.id).first()
 
         if owner is None:
-            print("Seed: no user found, skipping demo orders.")
+            logger.info("Seed: no user found, skipping demo orders.")
         else:
             order1 = models.Order(
                 order_number="ORD-2026-0001",
@@ -478,18 +481,22 @@ def seed_demo_data() -> bool:
             )
 
         db.commit()
-        print(
+        logger.info(
             "Seed: demo data created successfully "
-            f"({len(warehouses)} warehouses, {len(suppliers)} suppliers, "
-            f"{len(products)} products, {len(inventory_rows)} inventory rows, "
-            f"{len(shipments)} shipments, 2 orders)."
+            "(%s warehouses, %s suppliers, %s products, %s inventory rows, "
+            "%s shipments, 2 orders).",
+            len(warehouses),
+            len(suppliers),
+            len(products),
+            len(inventory_rows),
+            len(shipments),
         )
         return True
 
     except Exception as e:
         if db is not None:
             db.rollback()
-        print(f"Seed: failed to create demo data: {e}")
+        logger.error("Seed: failed to create demo data: %s", e)
         return False
     finally:
         if db is not None:

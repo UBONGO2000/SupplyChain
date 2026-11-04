@@ -451,30 +451,38 @@ class ShipmentResponse(ShipmentBase):
 # ============================================
 # ORDER SCHEMAS
 # ============================================
-class OrderItemBase(BaseModel):
-    """Base fields for order item"""
+class OrderItemCreate(BaseModel):
+    """Fields accepted when creating an order item.
+
+    `unit_price` is accepted for backward compatibility but **ignored**: the
+    price of record is always `Product.unit_price`, read server-side. A client
+    sending `0.01` for a 100.00 product still gets charged 100.00.
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     product_id: int
     quantity: int = Field(..., ge=1)
-    unit_price: Decimal = Field(..., ge=0)
-    discount_percent: Decimal = Field(default=0.00, ge=0, le=100)
+    unit_price: Optional[Decimal] = Field(
+        default=None,
+        ge=0,
+        description="Ignored. The server always uses Product.unit_price.",
+    )
+    discount_percent: Decimal = Field(default=Decimal("0.00"), ge=0, le=100)
 
 
-class OrderItemCreate(OrderItemBase):
-    """Fields required to create order item"""
-
-    pass
-
-
-class OrderItemResponse(OrderItemBase):
+class OrderItemResponse(BaseModel):
     """Full order item response"""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
+    product_id: int
+    quantity: int
+    unit_price: Decimal
+    discount_percent: Decimal
     line_total: Decimal
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class OrderBase(BaseModel):
@@ -486,9 +494,15 @@ class OrderBase(BaseModel):
 
 
 class OrderCreate(OrderBase):
-    """Fields required to create order"""
+    """Fields required to create order.
 
-    user_id: int
+    `user_id` is optional: it defaults to the authenticated user. Only
+    admin/manager may target another account (enforced in services.orders).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    user_id: Optional[int] = None
     items: List[OrderItemCreate] = Field(..., min_length=1)
 
     @field_validator("items")
@@ -500,14 +514,18 @@ class OrderCreate(OrderBase):
 
 
 class OrderUpdate(BaseModel):
-    """Fields for updating order"""
+    """Fields for updating order.
+
+    `shipped_at`/`delivered_at` are deliberately absent: timestamps are set
+    by the server when the status transition happens, never by the client.
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     status: Optional[OrderStatusEnum] = None
     shipping_address: Optional[str] = None
     billing_address: Optional[str] = None
     notes: Optional[str] = None
-    shipped_at: Optional[datetime] = None
-    delivered_at: Optional[datetime] = None
 
 
 class OrderResponse(OrderBase):

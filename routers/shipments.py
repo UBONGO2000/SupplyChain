@@ -58,7 +58,7 @@ def get_shipments(
 
     total = query.count()
     items = (
-        query.order_by(desc(models.Shipment.created_at))
+        query.order_by(desc(models.Shipment.created_at), desc(models.Shipment.id))
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()

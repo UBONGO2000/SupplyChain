@@ -60,7 +60,12 @@ def get_warehouses(
         query = query.filter(models.Warehouse.is_active == is_active)
 
     total = query.count()
-    items = query.offset((page - 1) * page_size).limit(page_size).all()
+    items = (
+        query.order_by(models.Warehouse.id)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
     return PaginatedResponse.create(items, total, page, page_size)
 
 
